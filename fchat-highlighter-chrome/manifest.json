@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "F-List Log Highlighter",
+  "version": "1.4",
+  "description": "Highlights messages from the Reporting user (red), Log submitted by (blue), and user-provided names (green) on F-List log pages.",
+  "icons": {
+    "128": "icon-128.png",
+    "48": "icon-128.png",
+    "32": "icon-128.png",
+    "16": "icon-128.png"
+  },
+  "action": {
+    "default_title": "F-List Log Highlighter",
+    "default_icon": "icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.f-list.net/fchat/getLog.php*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
