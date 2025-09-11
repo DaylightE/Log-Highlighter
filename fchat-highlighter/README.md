@@ -32,11 +32,6 @@ Features
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
   - One-time disable via 'fhl_off=1' URL param or the close button
 
-How it works
-- Parses page text to extract labels and group messages by header lines like "[HH:MM]" or "[YYYY-MM-DD HH:MM]".
-- Re-renders as blocks with preserved text and applied highlights.
-- Fetches profile pages client-side to read the 'Gender:' field and colorize the names.
-
 Install (temporary, for development)
 1) Open Firefox and go to: about:debugging#/runtime/this-firefox
 2) Click "Load Temporary Add-on"
