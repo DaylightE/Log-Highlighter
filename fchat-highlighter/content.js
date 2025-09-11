@@ -36,12 +36,35 @@
     return next === "" || next === " " || next === ":" || next === "[";
   }
 
-  function makeLegendItem(color, label) {
+  function makeLegendItem(color, label, key) {
     const span = document.createElement("span");
     const sw = document.createElement("span");
     sw.style.cssText = `display:inline-block; width:12px; height:12px; background:${color}; border:1px solid rgba(255,255,255,0.12); vertical-align:middle; margin-right:6px;`;
     span.appendChild(sw);
-    span.append(document.createTextNode(label));
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    span.appendChild(labelEl);
+    if (key) {
+      span.style.cursor = "pointer";
+      span.title = "Click to toggle this highlight";
+      span.style.userSelect = "none";
+      const applyState = () => {
+        const enabled = (highlightToggles && Object.prototype.hasOwnProperty.call(highlightToggles, key)) ? !!highlightToggles[key] : true;
+        sw.style.opacity = enabled ? "1" : "0.25";
+        span.style.opacity = enabled ? "1" : "0.7";
+        labelEl.style.color = enabled ? "#e6e6e6" : "#9aa7bd";
+        labelEl.style.textDecoration = enabled ? "none" : "line-through";
+      };
+      span.addEventListener("click", () => {
+        try {
+          highlightToggles[key] = !highlightToggles[key];
+          localStorage.setItem(TOGGLE_STORE_KEY, JSON.stringify(highlightToggles));
+        } catch {}
+        applyState();
+        updateHighlights();
+      });
+      setTimeout(applyState, 0);
+    }
     return span;
   }
 
@@ -204,6 +227,19 @@
   const COLOR_SUBMIT = "rgba(0, 102, 255, 0.18)"; // blue
   const COLOR_EXTRA  = "rgba(0, 170, 0, 0.18)";   // green for additional names
 
+  // Legend toggle persistence
+  const TOGGLE_STORE_KEY = "fchatHighlighterLegendToggles";
+  let highlightToggles = { report: true, submit: true, extra: true };
+  try {
+    const savedToggles = localStorage.getItem(TOGGLE_STORE_KEY);
+    if (savedToggles) {
+      const t = JSON.parse(savedToggles);
+      if (t && typeof t === 'object') {
+        highlightToggles = { ...highlightToggles, ...t };
+      }
+    }
+  } catch {}
+
   // Clear the page and inject our structured view
   document.documentElement.style.background = "#0b0b0b"; // dark back helps highlights stand out
   document.body.innerHTML = "";
@@ -230,7 +266,7 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v1.4";
+  versionLabel.textContent = "F-list Log Highlighter v1.5";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
@@ -302,7 +338,7 @@
     "None":        "#9aa0a6", // Grey
     "Female":      "#ff66b3", // Pink
     // Male uses the current default link color (set dynamically)
-    "Herm":        "#5b2b8a", // Dark Purple
+    "Herm":        "#7913dfff", // Dark Purple
     "Male-Herm":   "#1f4b99", // Dark Blue
     "Shemale":     "#b38bfa", // Light Purple
     "Cunt-Boy":    "#3fb950", // Green
@@ -416,9 +452,9 @@
   metaLeft.appendChild(reportDiv);
   const legend = document.createElement("div");
   legend.style.cssText = "display:flex; gap:12px; align-items:center; width:100%;";
-  legend.appendChild(makeLegendItem(COLOR_REPORT, "Reported user"));
-  legend.appendChild(makeLegendItem(COLOR_SUBMIT, "Log submitted by"));
-  legend.appendChild(makeLegendItem(COLOR_EXTRA, "Additional"));
+  legend.appendChild(makeLegendItem(COLOR_REPORT, "Reported user", 'report'));
+  legend.appendChild(makeLegendItem(COLOR_SUBMIT, "Log submitted by", 'submit'));
+  legend.appendChild(makeLegendItem(COLOR_EXTRA, "Additional", 'extra'));
   const extraWrap = document.createElement("div");
   extraWrap.style.cssText = "display:flex; align-items:center; gap:8px; width:100%;";
   const extraLabel = document.createElement("label");
@@ -430,6 +466,21 @@
   extraInput.style.cssText = "padding:6px 8px; border-radius:4px; border:1px solid #333; background:#111; color:#e6e6e6; min-width:280px;";
   extraWrap.appendChild(extraLabel);
   extraWrap.appendChild(extraInput);
+  // Navigation buttons to jump between highlighted messages
+  const navBtnUp = document.createElement("button");
+  navBtnUp.textContent = "\u25B2"; // ▲
+  navBtnUp.title = "Previous highlighted message";
+  navBtnUp.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+  navBtnUp.addEventListener("mouseenter", () => { navBtnUp.style.background = "#1f1f1f"; });
+  navBtnUp.addEventListener("mouseleave", () => { navBtnUp.style.background = "#151515"; });
+  const navBtnDown = document.createElement("button");
+  navBtnDown.textContent = "\u25BC"; // ▼
+  navBtnDown.title = "Next highlighted message";
+  navBtnDown.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+  navBtnDown.addEventListener("mouseenter", () => { navBtnDown.style.background = "#1f1f1f"; });
+  navBtnDown.addEventListener("mouseleave", () => { navBtnDown.style.background = "#151515"; });
+  extraWrap.appendChild(navBtnUp);
+  extraWrap.appendChild(navBtnDown);
   meta.appendChild(metaLeft);
   meta.appendChild(legend);
   meta.appendChild(extraWrap);
@@ -508,6 +559,56 @@
     wrappers.push({ wrap, pre, msg, origText: pre.textContent });
   }
 
+  // --- Highlight navigation helpers ---
+  let navList = [];
+  let navIndex = -1;
+  let lastFocusedWrap = null;
+  function rebuildNavList() {
+    navList = wrappers.filter(w => w.wrap && w.wrap.dataset && w.wrap.dataset.fhlHi === '1');
+    if (!navList.length) { navIndex = -1; return; }
+
+    // If we have a previously focused item and it's still highlighted, keep index
+    if (lastFocusedWrap) {
+      const idx = navList.findIndex(w => w.wrap === lastFocusedWrap);
+      if (idx !== -1) { navIndex = idx; return; }
+    }
+
+    // Otherwise, pick anchor based on current scroll position (last highlight above viewport)
+    const anchorY = (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) + 1;
+    let idxAnchor = -1;
+    for (let i = 0; i < navList.length; i++) {
+      try {
+        const rect = navList[i].wrap.getBoundingClientRect();
+        const y = rect.top + (window.scrollY || 0);
+        if (y <= anchorY) idxAnchor = i; else break;
+      } catch {}
+    }
+    navIndex = idxAnchor;
+  }
+  function focusWrap(wrap) {
+    try { wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { wrap.scrollIntoView(true); }
+    // brief outline to indicate focus
+    for (const w of wrappers) { w.wrap.style.outline = ""; w.wrap.style.outlineOffset = ""; }
+    wrap.style.outline = "2px solid #aaa";
+    wrap.style.outlineOffset = "-2px";
+    lastFocusedWrap = wrap;
+  }
+  function gotoNextHighlighted() {
+    if (!navList.length) { rebuildNavList(); }
+    if (!navList.length) return;
+    navIndex = (navIndex + 1) % navList.length;
+    focusWrap(navList[navIndex].wrap);
+  }
+  function gotoPrevHighlighted() {
+    if (!navList.length) { rebuildNavList(); }
+    if (!navList.length) return;
+    navIndex = (navIndex - 1 + navList.length) % navList.length;
+    focusWrap(navList[navIndex].wrap);
+  }
+
+  navBtnDown.addEventListener('click', gotoNextHighlighted);
+  navBtnUp.addEventListener('click', gotoPrevHighlighted);
+
   // Parse extra names from input
   function parseExtraNames(value) {
     return (value || "")
@@ -526,28 +627,41 @@
 
   function updateHighlights() {
     const extras = parseExtraNames(extraInput.value);
+    // Preserve current position if possible; index adjusted in rebuildNavList()
     for (const { wrap, msg } of wrappers) {
+      let isHi = false;
       // default
       wrap.style.background = "transparent";
       wrap.style.border = "transparent";
       const s = msg.afterNoStar || "";
-      if (afterStartsWithName(s, reportName)) {
+      if (highlightToggles.report && afterStartsWithName(s, reportName)) {
         wrap.style.background = COLOR_REPORT;
         wrap.style.border = "1px solid #400";
-      } else if (afterStartsWithName(s, submitName)) {
+        isHi = true;
+      } else if (highlightToggles.submit && afterStartsWithName(s, submitName)) {
         wrap.style.background = COLOR_SUBMIT;
         wrap.style.border = "1px solid #024";
+        isHi = true;
       } else {
         // additional names (green)
-        for (const n of extras) {
-          if (afterStartsWithName(s, n)) {
-            wrap.style.background = COLOR_EXTRA;
-            wrap.style.border = "1px solid #063";
-            break;
+        if (highlightToggles.extra) {
+          for (const n of extras) {
+            if (afterStartsWithName(s, n)) {
+              wrap.style.background = COLOR_EXTRA;
+              wrap.style.border = "1px solid #063";
+              isHi = true;
+              break;
+            }
           }
         }
       }
+      if (isHi) {
+        wrap.dataset.fhlHi = '1';
+      } else {
+        wrap.dataset.fhlHi = '0';
+      }
     }
+    rebuildNavList();
   }
 
   // --- Timestamp conversion ---
