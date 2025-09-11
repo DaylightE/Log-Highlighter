@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "F-List Log Highlighter",
-  "version": "1.5",
-  "description": "Highlights messages from the Reporting user (red) and Log submitted by user (blue) on F-List log pages.",
+  "version": "2.0",
+  "description": "Highlights Reporting (red), Submitted (blue), and additional (green) names; click messages to select and copy selected to clipboard.",
   "icons": {
     "128": "icon-128.png",
     "48": "icon-128.png",

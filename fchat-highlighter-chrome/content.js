@@ -266,7 +266,7 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v1.5";
+  versionLabel.textContent = "F-list Log Highlighter v2.0";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
@@ -481,6 +481,48 @@
   navBtnDown.addEventListener("mouseleave", () => { navBtnDown.style.background = "#151515"; });
   extraWrap.appendChild(navBtnUp);
   extraWrap.appendChild(navBtnDown);
+
+  // Copy button for selected (gold-bordered) messages
+  const copyBtn = document.createElement("button");
+  copyBtn.textContent = "Copy Selected";
+  copyBtn.title = "Copy gold-bordered messages to clipboard";
+  copyBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+  copyBtn.addEventListener("mouseenter", () => { copyBtn.style.background = "#1f1f1f"; });
+  copyBtn.addEventListener("mouseleave", () => { copyBtn.style.background = "#151515"; });
+  copyBtn.addEventListener('click', async () => {
+    try {
+      // Collect in chronological order (wrappers insertion order)
+      const selected = wrappers.filter(w => w && w.wrap && w.wrap.dataset && w.wrap.dataset.fhlSelected === '1');
+      if (!selected.length) {
+        const old = copyBtn.textContent;
+        copyBtn.textContent = 'Nothing selected';
+        setTimeout(() => { copyBtn.textContent = old; }, 1200);
+        return;
+      }
+      const text = selected.map(w => w.pre && w.pre.textContent ? w.pre.textContent : '').join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-1000px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      const old = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = old; }, 1000);
+    } catch (e) {
+      const old = copyBtn.textContent;
+      copyBtn.textContent = 'Copy failed';
+      setTimeout(() => { copyBtn.textContent = old; }, 1500);
+    }
+  });
+  extraWrap.appendChild(copyBtn);
   meta.appendChild(metaLeft);
   meta.appendChild(legend);
   meta.appendChild(extraWrap);
@@ -556,6 +598,23 @@
     pre.textContent = msg.blockLines.join("\n");
     wrap.appendChild(pre);
     container.appendChild(wrap);
+
+    // Click to toggle gold selection border (ignore if user is selecting text)
+    const setSelected = (el, selected) => {
+      try { el.dataset.fhlSelected = selected ? '1' : '0'; } catch {}
+      el.style.boxShadow = selected ? '0 0 0 2px gold inset' : '';
+    };
+    wrap.addEventListener('click', (ev) => {
+      try {
+        const sel = window.getSelection && window.getSelection();
+        if (sel && String(sel).length > 0) return; // don't toggle when text is selected
+      } catch {}
+      const isSelected = wrap.dataset && wrap.dataset.fhlSelected === '1';
+      setSelected(wrap, !isSelected);
+    });
+    // Initialize as not selected
+    setSelected(wrap, false);
+
     wrappers.push({ wrap, pre, msg, origText: pre.textContent });
   }
 

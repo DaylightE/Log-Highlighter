@@ -10,6 +10,9 @@ Features
   - Reporting user messages: red background
   - Log submitted by messages: blue background
   - Additional names: green background (comma-separated input)
+- Select and copy:
+  - Click any message to toggle a gold selection border
+  - Use the "Copy Selected" button (beside the Up/Down buttons) to copy selected messages to your clipboard in chronological order
 - Header details:
   - Shows 'Log submitted by', 'Log submitted on', 'Reporting user' and 'Tab'
   - Colors the submitter and reporter names by profile gender:
@@ -53,9 +56,15 @@ A Chrome-ready copy is in `../fchat-highlighter-chrome/`.
 - Package for the Chrome Web Store: zip the contents of `fchat-highlighter-chrome/` (not the parent folder) and upload.
 - The Chrome manifest omits Firefox-only `browser_specific_settings` and reuses the same `content.js` and `icon-128.png`.
 
+- Chrome build includes click-to-select and the "Copy Selected" button, matching Firefox.
+
 
 What's New
 ----------
+2.0
+- Click a message to toggle selection (gold border)
+- Add "Copy Selected" button beside the Up/Down arrows to copy selected messages (chronological order) to clipboard
+
 1.5
 - Clickable legend toggles to enable/disable Reported/Submitted/Additional highlights (saved per browser)
 - Add Up/Down navigation beside "Additional names" to move through highlighted messages
@@ -70,4 +79,3 @@ What's New
 
 1.3
 - Initial public version with highlighting, extras input, and time conversion
-
