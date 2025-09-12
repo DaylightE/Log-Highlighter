@@ -485,7 +485,7 @@
   // Copy button for selected (gold-bordered) messages
   const copyBtn = document.createElement("button");
   copyBtn.textContent = "Copy Selected";
-  copyBtn.title = "Copy gold-bordered messages to clipboard";
+  copyBtn.title = "Copy selected messages to clipboard. You can select messages by clicking on them in the log";
   copyBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
   copyBtn.addEventListener("mouseenter", () => { copyBtn.style.background = "#1f1f1f"; });
   copyBtn.addEventListener("mouseleave", () => { copyBtn.style.background = "#151515"; });

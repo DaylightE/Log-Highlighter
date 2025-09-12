@@ -1,0 +1,18 @@
+{
+  "addons": {
+    "fchat-highlighter@example.com": {
+      "updates": [
+        {
+          "version": "2.0.3",
+          "update_link": "https://raw.githubusercontent.com/USER/REPO/BRANCH/fchat-highlighter-firefox/loghighlighter-2.0.3.xpi",
+          "applications": {
+            "gecko": {
+              "strict_min_version": "109.0"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
