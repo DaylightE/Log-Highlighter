@@ -266,7 +266,7 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v2.1.2";
+  versionLabel.textContent = "F-list Log Highlighter v2.2";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
@@ -482,23 +482,43 @@
   extraWrap.appendChild(navBtnUp);
   extraWrap.appendChild(navBtnDown);
 
-  // Copy button for selected (gold-bordered) messages
-  const copyBtn = document.createElement("button");
-  copyBtn.textContent = "Copy Selected";
-  copyBtn.title = "Copy selected messages to clipboard. You can select messages by clicking on them in the log";
-  copyBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
-  copyBtn.addEventListener("mouseenter", () => { copyBtn.style.background = "#1f1f1f"; });
-  copyBtn.addEventListener("mouseleave", () => { copyBtn.style.background = "#151515"; });
+    // Copy button for selected (gold-bordered) messages
+    const copyBtn = document.createElement("button");
+    // Build traditional icons with inline SVG for consistent rendering
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    function svgEl(name, attrs) {
+      const el = document.createElementNS(SVG_NS, name);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    function makeClipboardIcon() {
+      // Two overlapping sheets of paper (classic copy icon)
+      const svg = svgEl('svg', { width: '16', height: '16', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: 'display:inline-block; vertical-align:middle;' });
+      // Back sheet
+      svg.appendChild(svgEl('rect', { x: '5', y: '3', width: '12', height: '15', rx: '2', ry: '2' }));
+      // Front sheet (slightly down/right)
+      svg.appendChild(svgEl('rect', { x: '7', y: '6', width: '12', height: '15', rx: '2', ry: '2' }));
+      return svg;
+    }
+    function setCopyBtnIcon() {
+      try { copyBtn.textContent = ''; } catch {}
+      try { copyBtn.innerHTML = ''; } catch {}
+      try { copyBtn.appendChild(makeClipboardIcon()); } catch { copyBtn.textContent = '[copy]'; }
+    }
+    setCopyBtnIcon();
+    copyBtn.title = "Copy selected messages to clipboard. You can select messages by clicking on them in the log";
+    copyBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+    copyBtn.addEventListener("mouseenter", () => { copyBtn.style.background = "#1f1f1f"; });
+    copyBtn.addEventListener("mouseleave", () => { copyBtn.style.background = "#151515"; });
   copyBtn.addEventListener('click', async () => {
     try {
       // Collect in chronological order (wrappers insertion order)
       const selected = wrappers.filter(w => w && w.wrap && w.wrap.dataset && w.wrap.dataset.fhlSelected === '1');
-      if (!selected.length) {
-        const old = copyBtn.textContent;
-        copyBtn.textContent = 'Nothing selected';
-        setTimeout(() => { copyBtn.textContent = old; }, 1200);
-        return;
-      }
+        if (!selected.length) {
+          copyBtn.textContent = 'Nothing selected';
+          setTimeout(() => { try { setCopyBtnIcon(); } catch {} }, 1200);
+          return;
+        }
       const text = selected.map(w => w.pre && w.pre.textContent ? w.pre.textContent : '').join('\n');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
@@ -513,16 +533,46 @@
         document.execCommand('copy');
         document.body.removeChild(ta);
       }
-      const old = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      setTimeout(() => { copyBtn.textContent = old; }, 1000);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { try { setCopyBtnIcon(); } catch {} }, 1000);
     } catch (e) {
-      const old = copyBtn.textContent;
-      copyBtn.textContent = 'Copy failed';
-      setTimeout(() => { copyBtn.textContent = old; }, 1500);
+        copyBtn.textContent = 'Copy failed';
+        setTimeout(() => { try { setCopyBtnIcon(); } catch {} }, 1500);
     }
   });
-  extraWrap.appendChild(copyBtn);
+    extraWrap.appendChild(copyBtn);
+
+    // Eye toggle: hide non-highlighted and non-selected messages
+    let hideMode = false;
+    const hideBtn = document.createElement("button");
+    // Eye icon (open/closed) via inline SVG; turns red when hiding
+    function makeEyeIcon(closed) {
+      const svg = svgEl('svg', { width: '18', height: '18', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: 'display:inline-block; vertical-align:middle;' });
+      // Eye outline
+      svg.appendChild(svgEl('path', { d: 'M1 12s5-7 11-7 11 7 11 7-5 7-11 7S1 12 1 12z' }));
+      // Pupil
+      svg.appendChild(svgEl('circle', { cx: '12', cy: '12', r: '3' }));
+      if (closed) {
+        svg.appendChild(svgEl('path', { d: 'M3 3L21 21' }));
+      }
+      return svg;
+    }
+    function setHideBtnLabel() {
+      try { hideBtn.textContent = ''; hideBtn.innerHTML = ''; } catch {}
+      hideBtn.style.color = hideMode ? "#e74c3c" : "#ccc";
+      try { hideBtn.appendChild(makeEyeIcon(hideMode)); } catch { hideBtn.textContent = hideMode ? '[eye-off]' : '[eye]'; }
+      hideBtn.title = hideMode ? "Show all messages" : "Show only highlighted/selected messages";
+    }
+    setHideBtnLabel();
+    hideBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+    hideBtn.addEventListener("mouseenter", () => { hideBtn.style.background = "#1f1f1f"; });
+    hideBtn.addEventListener("mouseleave", () => { hideBtn.style.background = "#151515"; });
+    hideBtn.addEventListener('click', () => {
+      hideMode = !hideMode;
+      setHideBtnLabel();
+      updateHiddenPlaceholders();
+    });
+    extraWrap.appendChild(hideBtn);
   meta.appendChild(metaLeft);
   meta.appendChild(legend);
   meta.appendChild(extraWrap);
@@ -603,21 +653,22 @@
       try { el.dataset.fhlSelected = selected ? '1' : '0'; } catch {}
       el.style.boxShadow = selected ? '0 0 0 2px gold inset' : '';
     };
-    wrap.addEventListener('click', (ev) => {
+      wrap.addEventListener('click', (ev) => {
       try {
         const sel = window.getSelection && window.getSelection();
         if (sel && String(sel).length > 0) return; // don't toggle when text is selected
       } catch {}
-      const isSelected = wrap.dataset && wrap.dataset.fhlSelected === '1';
-      setSelected(wrap, !isSelected);
-    });
+        const isSelected = wrap.dataset && wrap.dataset.fhlSelected === '1';
+        setSelected(wrap, !isSelected);
+        if (hideMode) updateHiddenPlaceholders();
+      });
     // Initialize as not selected
     setSelected(wrap, false);
 
     wrappers.push({ wrap, pre, msg, origText: pre.textContent });
   }
 
-  // --- Highlight navigation helpers ---
+    // --- Highlight navigation helpers ---
   let navList = [];
   let navIndex = -1;
   let lastFocusedWrap = null;
@@ -664,8 +715,50 @@
     focusWrap(navList[navIndex].wrap);
   }
 
-  navBtnDown.addEventListener('click', gotoNextHighlighted);
-  navBtnUp.addEventListener('click', gotoPrevHighlighted);
+    navBtnDown.addEventListener('click', gotoNextHighlighted);
+    navBtnUp.addEventListener('click', gotoPrevHighlighted);
+
+    // --- Hide non-highlighted/non-selected toggle ---
+    function removePlaceholders() {
+      try {
+        const phs = container.querySelectorAll('[data-fhl-placeholder="1"]');
+        phs.forEach(ph => ph.parentNode && ph.parentNode.removeChild(ph));
+      } catch {}
+    }
+    function insertPlaceholder(beforeElem, count) {
+      const ph = document.createElement('div');
+      ph.dataset.fhlPlaceholder = '1';
+      ph.textContent = `${count} messages hidden`;
+      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f;";
+      try { container.insertBefore(ph, beforeElem); } catch { container.appendChild(ph); }
+    }
+    function updateHiddenPlaceholders() {
+      if (!hideMode) {
+        removePlaceholders();
+        for (const w of wrappers) { w.wrap.style.display = ''; }
+        return;
+      }
+      removePlaceholders();
+      let groupStart = -1;
+      let groupCount = 0;
+      for (let i = 0; i < wrappers.length; i++) {
+        const w = wrappers[i];
+        const keep = (w.wrap.dataset && (w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
+        if (keep) {
+          w.wrap.style.display = '';
+          if (groupStart !== -1) {
+            insertPlaceholder(wrappers[groupStart].wrap, groupCount);
+            groupStart = -1; groupCount = 0;
+          }
+        } else {
+          w.wrap.style.display = 'none';
+          if (groupStart === -1) { groupStart = i; groupCount = 1; } else { groupCount++; }
+        }
+      }
+      if (groupStart !== -1) {
+        insertPlaceholder(wrappers[groupStart].wrap, groupCount);
+      }
+    }
 
   // Parse extra names from input
   function parseExtraNames(value) {
@@ -683,7 +776,7 @@
     if (saved) extraInput.value = saved;
   } catch {}
 
-  function updateHighlights() {
+    function updateHighlights() {
     const extras = parseExtraNames(extraInput.value);
     // Preserve current position if possible; index adjusted in rebuildNavList()
     for (const { wrap, msg } of wrappers) {
@@ -719,8 +812,9 @@
         wrap.dataset.fhlHi = '0';
       }
     }
-    rebuildNavList();
-  }
+      rebuildNavList();
+      if (hideMode) updateHiddenPlaceholders(); else removePlaceholders();
+    }
 
   // --- Timestamp conversion ---
   function parseOffsetMinutesFromSubmittedOn(text) {

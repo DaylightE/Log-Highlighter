@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
-  <app appid="CHROME_EXTENSION_ID">
-    <updatecheck codebase="https://raw.githubusercontent.com/DaylightE/Log-Highlighter/main/binaries/fchat-highlighter-chrome.crx" version="2.1.2"/>
-  </app>
-  <!-- Optional: <updateprompt/> to force update prompts -->
-  <!-- Keep appid equal to your extension's ID. -->
-  <!-- Ensure the CRX file exists at the codebase URL and is signed with the same key used to create the extension ID. -->
-</gupdate>

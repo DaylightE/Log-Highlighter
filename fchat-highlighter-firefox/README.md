@@ -12,7 +12,8 @@ Features
   - Additional names: green background (comma-separated input)
 - Select and copy:
   - Click any message to toggle a gold selection border
-  - Use the "Copy Selected" button (beside the Up/Down buttons) to copy selected messages to your clipboard in chronological order
+  - Click the clipboard icon (beside the Up/Down buttons) to copy selected messages to your clipboard in chronological order
+  - New: eye toggle to show only highlighted or selected messages; hidden runs are collapsed with a "N messages hidden" placeholder
 - Header details:
   - Shows 'Log submitted by', 'Log submitted on', 'Reporting user' and 'Tab'
   - Colors the submitter and reporter names by profile gender:
@@ -51,11 +52,15 @@ A Chrome-ready copy is in `../fchat-highlighter-chrome/`.
 - Package for the Chrome Web Store: zip the contents of `fchat-highlighter-chrome/` (not the parent folder) and upload.
 - The Chrome manifest omits Firefox-only `browser_specific_settings` and reuses the same `content.js` and `icon-128.png`.
 
-- Chrome build includes click-to-select and the "Copy Selected" button, matching Firefox.
+- Chrome build includes click-to-select and the clipboard icon button, matching Firefox.
 
 
 What's New
 ----------
+2.2
+- Add eye toggle: hide all non-highlighted/non-selected messages and replace gaps with a "N messages hidden" placeholder. Eye turns red when active.
+- Replace text label with traditional copy icon (two overlapping sheets) for the copy-to-clipboard button.
+
 2.0
 - Click a message to toggle selection (gold border)
 - Add "Copy Selected" button beside the Up/Down arrows to copy selected messages (chronological order) to clipboard
