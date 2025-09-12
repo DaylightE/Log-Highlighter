@@ -4,7 +4,7 @@
       "updates": [
         {
           "version": "2.1",
-          "update_link": "https://raw.githubusercontent.com/DaylightE/Log-Highlighter/main/fchat-highlighter-firefox/loghighlighter-2.1.xpi",
+          "update_link": "https://raw.githubusercontent.com/DaylightE/Log-Highlighter/main/binaries/loghighlighter-2.1.xpi",
           "applications": {
             "gecko": {
               "strict_min_version": "109.0"
