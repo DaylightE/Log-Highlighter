@@ -266,7 +266,7 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v2.0";
+  versionLabel.textContent = "F-list Log Highlighter v2.1.1";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
