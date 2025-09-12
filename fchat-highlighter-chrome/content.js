@@ -266,7 +266,7 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v2.2";
+  versionLabel.textContent = "F-list Log Highlighter v2.3";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
@@ -542,7 +542,13 @@
     extraWrap.appendChild(copyBtn);
 
     // Eye toggle: hide non-highlighted and non-selected messages
-    let hideMode = false;
+      let hideMode = false;
+      let openHiddenRanges = [];
+      function rangeIntersects(s1, e1, s2, e2) { return s1 <= e2 && s2 <= e1; }
+      function isRangeOpen(s, e) {
+        for (const r of openHiddenRanges) { if (rangeIntersects(s, e, r.s, r.e)) return true; }
+        return false;
+      }
     const hideBtn = document.createElement("button");
     function makeEyeIcon(closed) {
       const svg = svgEl('svg', { width: '18', height: '18', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: 'display:inline-block; vertical-align:middle;' });
@@ -561,11 +567,12 @@
     hideBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
     hideBtn.addEventListener("mouseenter", () => { hideBtn.style.background = "#1f1f1f"; });
     hideBtn.addEventListener("mouseleave", () => { hideBtn.style.background = "#151515"; });
-    hideBtn.addEventListener('click', () => {
-      hideMode = !hideMode;
-      setHideBtnLabel();
-      updateHiddenPlaceholders();
-    });
+      hideBtn.addEventListener('click', () => {
+        hideMode = !hideMode;
+        if (!hideMode) openHiddenRanges = [];
+        setHideBtnLabel();
+        updateHiddenPlaceholders();
+      });
     extraWrap.appendChild(hideBtn);
   meta.appendChild(metaLeft);
   meta.appendChild(legend);
@@ -720,18 +727,35 @@
         phs.forEach(ph => ph.parentNode && ph.parentNode.removeChild(ph));
       } catch {}
     }
-    function insertPlaceholder(beforeElem, count) {
+    function insertPlaceholder(groupStart, count, open) {
+      const beforeElem = wrappers[groupStart] && wrappers[groupStart].wrap;
       const ph = document.createElement('div');
       ph.dataset.fhlPlaceholder = '1';
-      ph.textContent = `${count} messages hidden`;
-      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f;";
+      ph.dataset.start = String(groupStart);
+      ph.dataset.count = String(count);
+      ph.dataset.open = open ? '1' : '0';
+      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      ph.textContent = open ? `Hide ${count} messages` : `${count} messages hidden`;
+        ph.addEventListener('click', () => {
+          const start = parseInt(ph.dataset.start || '-1', 10);
+          const cnt = parseInt(ph.dataset.count || '0', 10);
+          if (!isFinite(start) || start < 0 || !isFinite(cnt) || cnt <= 0) return;
+          const end = start + cnt - 1;
+          if (ph.dataset.open === '1') {
+            closeOpenRange(start, end);
+          } else {
+            addOpenRange(start, end);
+          }
+          updateHiddenPlaceholders();
+        });
       try { container.insertBefore(ph, beforeElem); } catch { container.appendChild(ph); }
     }
     function updateHiddenPlaceholders() {
       if (!hideMode) {
-        removePlaceholders();
-        for (const w of wrappers) { w.wrap.style.display = ''; }
-        return;
+          removePlaceholders();
+          for (const w of wrappers) { w.wrap.style.display = ''; }
+          openHiddenRanges = [];
+          return;
       }
       removePlaceholders();
       let groupStart = -1;
@@ -742,16 +766,32 @@
         if (keep) {
           w.wrap.style.display = '';
           if (groupStart !== -1) {
-            insertPlaceholder(wrappers[groupStart].wrap, groupCount);
+            const isOpen = isRangeOpen(groupStart, groupStart + groupCount - 1);
+            if (isOpen) {
+              for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+            }
+            insertPlaceholder(groupStart, groupCount, isOpen);
             groupStart = -1; groupCount = 0;
           }
         } else {
-          w.wrap.style.display = 'none';
+          // defer display until we know if this group is open
           if (groupStart === -1) { groupStart = i; groupCount = 1; } else { groupCount++; }
         }
       }
       if (groupStart !== -1) {
-        insertPlaceholder(wrappers[groupStart].wrap, groupCount);
+        const isOpen = isRangeOpen(groupStart, groupStart + groupCount - 1);
+        if (isOpen) {
+          for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+        }
+        insertPlaceholder(groupStart, groupCount, isOpen);
+      }
+      // hide not-open groups
+      for (let i = 0; i < wrappers.length; i++) {
+        const w = wrappers[i];
+        const keep = (w.wrap.dataset && (w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
+        if (keep) continue;
+          const inOpen = isRangeOpen(i, i);
+          w.wrap.style.display = inOpen ? '' : 'none';
       }
     }
 

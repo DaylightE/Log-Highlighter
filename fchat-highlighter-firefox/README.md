@@ -57,6 +57,10 @@ A Chrome-ready copy is in `../fchat-highlighter-chrome/`.
 
 What's New
 ----------
+2.3
+- Improve hidden-group expansion logic: expanding a hidden run and then selecting a message in the middle no longer causes sibling portions to re-hide when you toggle one placeholder. Each placeholder now controls only its own segment reliably.
+- Keep expanded segments visible when selecting/deselecting messages within them.
+
 2.2
 - Add eye toggle: hide all non-highlighted/non-selected messages and replace gaps with a "N messages hidden" placeholder. Eye turns red when active.
 - Replace text label with traditional copy icon (two overlapping sheets) for the copy-to-clipboard button.
