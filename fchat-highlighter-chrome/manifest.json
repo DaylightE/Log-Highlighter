@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "F-List Log Highlighter",
-  "version": "2.0.2",
+  "version": "2.1",
   "description": "Highlights Reporting (red), Submitted (blue), and additional (green) names; click messages to select and copy selected to clipboard.",
   "update_url": "https://raw.githubusercontent.com/USER/REPO/BRANCH/fchat-highlighter-chrome/update.xml",
   "icons": {
