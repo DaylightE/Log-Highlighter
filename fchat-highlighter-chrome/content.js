@@ -289,10 +289,54 @@
   });
   // Version label to the left of the X
   const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v2.3";
+  versionLabel.textContent = "F-list Log Highlighter v2.4";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
+  // Disclaimer under the version label
+  try {
+    const disclaimer = document.createElement("div");
+    disclaimer.textContent = "Highlighting and hiding logic is not perfect, review critical info";
+    disclaimer.style.cssText = "position:absolute; top:28px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
+    header.appendChild(disclaimer);
+    const disclaimer2 = document.createElement("div");
+    disclaimer2.textContent = "Messages are detected by timestamp, users sharing logs may confuse the extention";
+    disclaimer2.style.cssText = "position:absolute; top:42px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
+    header.appendChild(disclaimer2);
+  } catch {}
+  // Top-middle prev/next nav based on ?log= param, styled like header buttons
+  try {
+    const u = new URL(location.href);
+    const logStr = u.searchParams.get('log');
+    const logNum = logStr ? parseInt(logStr, 10) : NaN;
+    if (!isNaN(logNum)) {
+      const navWrap = document.createElement('div');
+      navWrap.style.cssText = "position:absolute; top:8px; left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center; z-index:2;";
+      function makeNavBtn(label, to) {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.title = label === '<' ? `Previous report (${to})` : `Next report (${to})`;
+        btn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer; font-weight:bold;";
+        btn.addEventListener('mouseenter', () => { btn.style.background = '#1f1f1f'; });
+        btn.addEventListener('mouseleave', () => { btn.style.background = '#151515'; });
+        btn.addEventListener('click', () => {
+          try {
+            const newUrl = new URL(location.href);
+            newUrl.searchParams.set('log', String(to));
+            location.assign(newUrl.toString());
+          } catch {
+            location.assign(`?log=${to}`);
+          }
+        });
+        return btn;
+      }
+      const prevB = makeNavBtn('<', logNum - 1);
+      const nextB = makeNavBtn('>', logNum + 1);
+      navWrap.appendChild(prevB);
+      navWrap.appendChild(nextB);
+      header.appendChild(navWrap);
+    }
+  } catch {}
   const meta = document.createElement("div");
   meta.style.opacity = "0.92";
   meta.style.cssText += "; display:flex; flex-direction:column; gap:8px; align-items:flex-start;";
@@ -656,7 +700,7 @@
     function setAdsBtnLabel() {
       try { adsBtn.textContent = 'Ads'; adsBtn.innerHTML = adsBtn.textContent; } catch {}
       adsBtn.style.color = adsMode ? '#e74c3c' : '#ccc';
-      adsBtn.title = adsMode ? 'Show all messages' : 'Hide unless first char is * or a name-ending ": " appears within first 22 chars';
+      adsBtn.title = adsMode ? 'Show all messages' : 'Hide unless first char is * or a name-ending ": " appears within first 22 chars. Does not hide highlighted messages';
     }
     setAdsBtnLabel();
     adsBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";

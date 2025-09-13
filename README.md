@@ -14,6 +14,10 @@ Features
   - Click any message to toggle a gold selection border
   - Click the clipboard icon (beside the Up/Down buttons) to copy selected messages to your clipboard in chronological order
   - New: eye toggle to show only highlighted or selected messages; hidden runs are collapsed with a "N messages hidden" placeholder
+- Ads filter:
+  - Toggle to hide messages unless the first non-space character after the timestamp is `*` (emote) or a name ends with `: ` within the first 22 characters
+  - Does not hide highlighted or selected messages
+  - Plays nicely with the eye toggle using nested "N ads hidden" placeholders inside opened groups; each ads segment can be opened/closed independently
 - Header details:
   - Shows 'Log submitted by', 'Log submitted on', 'Reporting user' and 'Tab'
   - Colors the submitter and reporter names by profile gender:
@@ -21,6 +25,8 @@ Features
     - Uses 'Gender:' from the user's profile page
   - Adds a star in front of the tab name when it's an official channel (based on known slugs)
   - Collapse/expand header controls
+  - Centered Previous/Next report buttons (styled like header buttons) jump to `?log=<id-1>` and `?log=<id+1>`
+  - Disclaimers under the version label to remind that highlighting/hiding isn’t perfect and timestamp-based detection can be confused by shared logs
 - Legend toggles:
   - Click the colored boxes to enable/disable highlighting for Reported, Submitted, and Additional names (saved in your browser)
 - Navigation:
@@ -43,20 +49,33 @@ Notes
 - This extension only reads and re-renders the log page content client-side.
 - No data is sent anywhere; it does not require special permissions.
 
+Firefox Version
+==============
+A Firefox-ready copy is in `../binaries/`.
+
+- Download the latest log_highlighter.xpi file and run it
+- You should get a popup in firefox to add the extention
+
 
 Chrome Version
 ==============
-A Chrome-ready copy is in `../fchat-highlighter-chrome/`.
+A Chrome-ready copy is in `../binaries/`.
 
-- Load in Chrome (dev): go to `chrome://extensions`, enable Developer Mode, click "Load unpacked", select `fchat-highlighter-chrome/`.
-- Package for the Chrome Web Store: zip the contents of `fchat-highlighter-chrome/` (not the parent folder) and upload.
-- The Chrome manifest omits Firefox-only `browser_specific_settings` and reuses the same `content.js` and `icon-128.png`.
-
-- Chrome build includes click-to-select and the clipboard icon button, matching Firefox.
+- Download fchat-highlighter-firefox.zip, and extract it
+- Go to `chrome://extensions`, enable Developer Mode, click "Load unpacked", select the foldier you just extracted.
 
 
 What's New
 ----------
+2.4
+- Ads filter toggle with refined logic:
+  - Pass if the first non-space character after the timestamp is `*` (emote), or a name ends with `: ` within the first 22 characters.
+  - Does not hide highlighted or selected messages.
+  - Plays nicely with the eye toggle: nested "x ads hidden" placeholders appear inside opened groups; each ads segment can be opened/closed independently.
+- Header enhancements:
+  - Centered prev/next report buttons styled like header controls.
+  - Added disclaimers under the version label.
+
 2.3
 - Improve hidden-group expansion logic: expanding a hidden run and then selecting a message in the middle no longer causes sibling portions to re-hide when you toggle one placeholder. Each placeholder now controls only its own segment reliably.
 - Keep expanded segments visible when selecting/deselecting messages within them.
