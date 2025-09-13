@@ -79,6 +79,27 @@
   const headerRe = /^\s*\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]\s*(.*)$/i;
   const tsStartRe = /^\s*\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]/i;
 
+  // Ads filter refined:
+  // - Spare if the first non-space character after timestamp is '*'
+  // - OR if within the first 22 characters after timestamp (including spaces),
+  //   there is a ':' that ends a word (i.e., previous char is alphanumeric, next is whitespace or end)
+  function adsCheckFirst22(textAfterTsIncludingSpaces) {
+    const s = String(textAfterTsIncludingSpaces || "");
+    const trimmed = s.replace(/^\s+/, "");
+    if (trimmed.startsWith('*')) return true;
+    const limit = Math.min(22, s.length);
+    for (let i = 0; i < limit; i++) {
+      if (s[i] === ':') {
+        const prev = i > 0 ? s[i - 1] : '';
+        const next = (i + 1 < s.length) ? s[i + 1] : '';
+        const prevIsWord = /[A-Za-z0-9]/.test(prev);
+        const nextOk = next === ' ';
+        if (prevIsWord && nextOk) return true;
+      }
+    }
+    return false;
+  }
+
   // Extract page text. Many of these logs are plain text; innerText preserves line breaks reasonably.
   const fullText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
   // Also keep the raw HTML so we can detect structural markers like <hr/>
@@ -183,7 +204,7 @@
 
   // Split into lines and group messages: header line -> body until next header
   const lines = fullText.split(/\r?\n/);
-  const messages = []; // {afterNoStar: string, blockLines: string[]}
+  const messages = []; // {afterNoStar: string, afterWithSpaces: string, blockLines: string[]}
   let cur = null;
 
   for (const line of lines) {
@@ -194,7 +215,9 @@
       const after = hm[1] || "";
       // Extract sender after optional leading '*'
       const afterNoStar = after.replace(/^\s*\*/, "");
-      cur = { afterNoStar, blockLines: [line] };
+      // Also keep the text after the timestamp including any spaces immediately after it
+      const afterWithSpaces = (line || "").replace(tsStartRe, "");
+      cur = { afterNoStar, afterWithSpaces, blockLines: [line] };
     } else {
       // Continuation
       if (cur) {
@@ -549,6 +572,55 @@
         for (const r of openHiddenRanges) { if (rangeIntersects(s, e, r.s, r.e)) return true; }
         return false;
       }
+      // Ads toggle: hide messages not matching the ADS rule
+      let adsMode = false;
+      // Open ranges management for hideMode placeholders
+      function addOpenRange(s, e) {
+        let ns = s, ne = e;
+        const merged = [];
+        for (const r of openHiddenRanges) {
+          if (r.e + 1 < ns || ne + 1 < r.s) merged.push(r);
+          else { ns = Math.min(ns, r.s); ne = Math.max(ne, r.e); }
+        }
+        merged.push({ s: ns, e: ne });
+        merged.sort((a,b)=>a.s-b.s);
+        openHiddenRanges = merged;
+      }
+      function closeOpenRange(s, e) {
+        const next = [];
+        for (const r of openHiddenRanges) {
+          if (!(r.s <= e && s <= r.e)) { next.push(r); continue; }
+          if (r.s < s) next.push({ s: r.s, e: Math.min(s - 1, r.e) });
+          if (e < r.e) next.push({ s: Math.max(e + 1, r.s), e: r.e });
+        }
+        openHiddenRanges = next;
+      }
+      // Open ranges for ADS placeholders
+      let openAdsRanges = [];
+      function adsIsRangeOpen(s, e) {
+        for (const r of openAdsRanges) { if (rangeIntersects(s, e, r.s, r.e)) return true; }
+        return false;
+      }
+      function addAdsOpenRange(s, e) {
+        let ns = s, ne = e;
+        const merged = [];
+        for (const r of openAdsRanges) {
+          if (r.e + 1 < ns || ne + 1 < r.s) merged.push(r);
+          else { ns = Math.min(ns, r.s); ne = Math.max(ne, r.e); }
+        }
+        merged.push({ s: ns, e: ne });
+        merged.sort((a,b)=>a.s-b.s);
+        openAdsRanges = merged;
+      }
+      function closeAdsOpenRange(s, e) {
+        const next = [];
+        for (const r of openAdsRanges) {
+          if (!(r.s <= e && s <= r.e)) { next.push(r); continue; }
+          if (r.s < s) next.push({ s: r.s, e: Math.min(s - 1, r.e) });
+          if (e < r.e) next.push({ s: Math.max(e + 1, r.s), e: r.e });
+        }
+        openAdsRanges = next;
+      }
     const hideBtn = document.createElement("button");
     function makeEyeIcon(closed) {
       const svg = svgEl('svg', { width: '18', height: '18', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', style: 'display:inline-block; vertical-align:middle;' });
@@ -569,11 +641,33 @@
     hideBtn.addEventListener("mouseleave", () => { hideBtn.style.background = "#151515"; });
       hideBtn.addEventListener('click', () => {
         hideMode = !hideMode;
-        if (!hideMode) openHiddenRanges = [];
+        if (!hideMode) {
+          openHiddenRanges = [];
+        } else {
+          // entering hide mode: reset ads open subranges to avoid leaking ads
+          try { openAdsRanges = []; } catch {}
+        }
         setHideBtnLabel();
-        updateHiddenPlaceholders();
+        applyVisibility();
       });
     extraWrap.appendChild(hideBtn);
+    // Ads filter button (to the right of the eye)
+    const adsBtn = document.createElement('button');
+    function setAdsBtnLabel() {
+      try { adsBtn.textContent = 'Ads'; adsBtn.innerHTML = adsBtn.textContent; } catch {}
+      adsBtn.style.color = adsMode ? '#e74c3c' : '#ccc';
+      adsBtn.title = adsMode ? 'Show all messages' : 'Hide unless first char is * or a name-ending ": " appears within first 22 chars';
+    }
+    setAdsBtnLabel();
+    adsBtn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+    adsBtn.addEventListener('mouseenter', () => { adsBtn.style.background = '#1f1f1f'; });
+    adsBtn.addEventListener('mouseleave', () => { adsBtn.style.background = '#151515'; });
+    adsBtn.addEventListener('click', () => {
+      adsMode = !adsMode;
+      setAdsBtnLabel();
+      applyVisibility();
+    });
+    extraWrap.appendChild(adsBtn);
   meta.appendChild(metaLeft);
   meta.appendChild(legend);
   meta.appendChild(extraWrap);
@@ -667,6 +761,12 @@
     // Initialize as not selected
     setSelected(wrap, false);
 
+    // Precompute ads check result and store on element dataset
+    try {
+      const adsPass = adsCheckFirst22(msg.afterWithSpaces || "");
+      wrap.dataset.fhlAds = adsPass ? '1' : '0';
+    } catch {}
+
     wrappers.push({ wrap, pre, msg, origText: pre.textContent });
   }
 
@@ -675,6 +775,7 @@
   let navIndex = -1;
   let lastFocusedWrap = null;
   function rebuildNavList() {
+    // Navigation always considers highlighted items, independent of ADS filter
     navList = wrappers.filter(w => w.wrap && w.wrap.dataset && w.wrap.dataset.fhlHi === '1');
     if (!navList.length) { navIndex = -1; return; }
 
@@ -739,18 +840,19 @@
         ph.addEventListener('click', () => {
           const start = parseInt(ph.dataset.start || '-1', 10);
           const cnt = parseInt(ph.dataset.count || '0', 10);
-          if (!isFinite(start) || start < 0 || !isFinite(cnt) || cnt <= 0) return;
+        if (!isFinite(start) || start < 0 || !isFinite(cnt) || cnt <= 0) return;
           const end = start + cnt - 1;
           if (ph.dataset.open === '1') {
             closeOpenRange(start, end);
           } else {
             addOpenRange(start, end);
           }
-          updateHiddenPlaceholders();
+          applyVisibility();
         });
       try { container.insertBefore(ph, beforeElem); } catch { container.appendChild(ph); }
     }
     function updateHiddenPlaceholders() {
+      if (adsMode) { try { removeAdsPlaceholders(); } catch {} }
       if (!hideMode) {
           removePlaceholders();
           for (const w of wrappers) { w.wrap.style.display = ''; }
@@ -768,7 +870,38 @@
           if (groupStart !== -1) {
             const isOpen = isRangeOpen(groupStart, groupStart + groupCount - 1);
             if (isOpen) {
-              for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+              if (adsMode) {
+                // Show/hide ads per openAdsRanges and create placeholders for both open and closed runs
+                let runStart = -1;
+                let runOpen = false;
+                for (let j = groupStart; j < groupStart + groupCount; j++) {
+                  const ww = wrappers[j];
+                  const isAd = !(ww.wrap.dataset && ww.wrap.dataset.fhlAds === '1');
+                  if (isAd) {
+                    const curOpen = adsIsRangeOpen(j, j);
+                    ww.wrap.style.display = curOpen ? '' : 'none';
+                    if (runStart === -1) { runStart = j; runOpen = curOpen; }
+                    else if (runOpen !== curOpen) {
+                      const runEnd = j - 1;
+                      insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+                      runStart = j; runOpen = curOpen;
+                    }
+                  } else {
+                    ww.wrap.style.display = '';
+                    if (runStart !== -1) {
+                      const runEnd = j - 1;
+                      insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+                      runStart = -1;
+                    }
+                  }
+                }
+                if (runStart !== -1) {
+                  const runEnd = (groupStart + groupCount) - 1;
+                  insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+                }
+              } else {
+                for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+              }
             }
             insertPlaceholder(groupStart, groupCount, isOpen);
             groupStart = -1; groupCount = 0;
@@ -781,17 +914,148 @@
       if (groupStart !== -1) {
         const isOpen = isRangeOpen(groupStart, groupStart + groupCount - 1);
         if (isOpen) {
-          for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+          if (adsMode) {
+            let runStart = -1;
+            let runOpen = false;
+            for (let j = groupStart; j < groupStart + groupCount; j++) {
+              const ww = wrappers[j];
+              const isAd = !(ww.wrap.dataset && ww.wrap.dataset.fhlAds === '1');
+              if (isAd) {
+                const curOpen = adsIsRangeOpen(j, j);
+                ww.wrap.style.display = curOpen ? '' : 'none';
+                if (runStart === -1) { runStart = j; runOpen = curOpen; }
+                else if (runOpen !== curOpen) {
+                  const runEnd = j - 1;
+                  insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+                  runStart = j; runOpen = curOpen;
+                }
+              } else {
+                ww.wrap.style.display = '';
+                if (runStart !== -1) {
+                  const runEnd = j - 1;
+                  insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+                  runStart = -1;
+                }
+              }
+            }
+            if (runStart !== -1) {
+              const runEnd = (groupStart + groupCount) - 1;
+              insertAdsPlaceholder(runStart, runEnd - runStart + 1, runOpen);
+            }
+          } else {
+            for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+          }
         }
         insertPlaceholder(groupStart, groupCount, isOpen);
+      }
+      // apply hiding for items not in open groups; and within open groups, keep Ads hidden unless opened
+      for (let i = 0; i < wrappers.length; i++) {
+        const w = wrappers[i];
+        const keepSelHi = (w.wrap.dataset && (w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
+        if (keepSelHi) continue;
+        const inOpen = isRangeOpen(i, i);
+        if (!inOpen) {
+          w.wrap.style.display = 'none';
+        } else {
+          if (adsMode) {
+            const isAd = !(w.wrap.dataset && w.wrap.dataset.fhlAds === '1');
+            const inOpenAd = adsIsRangeOpen(i, i);
+            w.wrap.style.display = (!isAd || inOpenAd) ? '' : 'none';
+          } else {
+            w.wrap.style.display = '';
+          }
+        }
+      }
+    }
+
+    // ADS-only placeholders, similar to hideMode placeholders
+    function removeAdsPlaceholders() {
+      try {
+        const phs = container.querySelectorAll('[data-fhl-placeholder-ads="1"]');
+        phs.forEach(ph => ph.parentNode && ph.parentNode.removeChild(ph));
+      } catch {}
+    }
+    function insertAdsPlaceholder(groupStart, count, open) {
+      const beforeElem = wrappers[groupStart] && wrappers[groupStart].wrap;
+      const ph = document.createElement('div');
+      ph.dataset.fhlPlaceholderAds = '1';
+      ph.dataset.start = String(groupStart);
+      ph.dataset.count = String(count);
+      ph.dataset.open = open ? '1' : '0';
+      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      ph.textContent = open ? `Hide ${count} ads` : `${count} ads hidden`;
+      ph.addEventListener('click', () => {
+        const start = parseInt(ph.dataset.start || '-1', 10);
+        const cnt = parseInt(ph.dataset.count || '0', 10);
+        if (!isFinite(start) || start < 0 || !isFinite(cnt) || cnt <= 0) return;
+        const end = start + cnt - 1;
+        if (ph.dataset.open === '1') {
+          closeAdsOpenRange(start, end);
+        } else {
+          addAdsOpenRange(start, end);
+        }
+        applyVisibility();
+      });
+      try { container.insertBefore(ph, beforeElem); } catch { container.appendChild(ph); }
+    }
+    function updateAdsPlaceholders() {
+      if (!adsMode) {
+        removeAdsPlaceholders();
+        for (const w of wrappers) { w.wrap.style.display = ''; }
+        openAdsRanges = [];
+        return;
+      }
+      removeAdsPlaceholders();
+      let groupStart = -1;
+      let groupCount = 0;
+      for (let i = 0; i < wrappers.length; i++) {
+        const w = wrappers[i];
+        const keep = (w.wrap.dataset && (w.wrap.dataset.fhlAds === '1' || w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
+        if (keep) {
+          w.wrap.style.display = '';
+          if (groupStart !== -1) {
+            const isOpen = adsIsRangeOpen(groupStart, groupStart + groupCount - 1);
+            if (isOpen) {
+              for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+            }
+            insertAdsPlaceholder(groupStart, groupCount, isOpen);
+            groupStart = -1; groupCount = 0;
+          }
+        } else {
+          if (groupStart === -1) { groupStart = i; groupCount = 1; } else { groupCount++; }
+        }
+      }
+      if (groupStart !== -1) {
+        const isOpen = adsIsRangeOpen(groupStart, groupStart + groupCount - 1);
+        if (isOpen) {
+          for (let j = groupStart; j < groupStart + groupCount; j++) { wrappers[j].wrap.style.display = ''; }
+        }
+        insertAdsPlaceholder(groupStart, groupCount, isOpen);
       }
       // hide not-open groups
       for (let i = 0; i < wrappers.length; i++) {
         const w = wrappers[i];
-        const keep = (w.wrap.dataset && (w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
+        const keep = (w.wrap.dataset && (w.wrap.dataset.fhlAds === '1' || w.wrap.dataset.fhlSelected === '1' || w.wrap.dataset.fhlHi === '1'));
         if (keep) continue;
-          const inOpen = isRangeOpen(i, i);
-          w.wrap.style.display = inOpen ? '' : 'none';
+        const inOpen = adsIsRangeOpen(i, i);
+        w.wrap.style.display = inOpen ? '' : 'none';
+      }
+    }
+
+    // Apply current visibility rules combining hide-mode and ads filter
+    function applyVisibility() {
+      rebuildNavList();
+      if (hideMode) {
+        removeAdsPlaceholders();
+        updateHiddenPlaceholders();
+      } else if (adsMode) {
+        // ADS-only grouped hiding
+        removePlaceholders();
+        updateAdsPlaceholders();
+      } else {
+        removePlaceholders();
+        removeAdsPlaceholders();
+        for (const w of wrappers) { w.wrap.style.display = ''; }
       }
     }
 
@@ -847,8 +1111,7 @@
         wrap.dataset.fhlHi = '0';
       }
     }
-      rebuildNavList();
-      if (hideMode) updateHiddenPlaceholders(); else removePlaceholders();
+      applyVisibility();
     }
 
   // --- Timestamp conversion ---
