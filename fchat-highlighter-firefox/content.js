@@ -288,9 +288,14 @@
     }
   });
   // Version label to the left of the X
-  const versionLabel = document.createElement("div");
-  versionLabel.textContent = "F-list Log Highlighter v2.4";
-  versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#9aa7bd; font-size:12px; pointer-events:none;";
+  const versionLabel = document.createElement("a");
+  versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
+  versionLabel.target = "_blank";
+  versionLabel.rel = "noopener noreferrer";
+  versionLabel.textContent = "F-list Log Highlighter v2.4.1";
+  versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
+  versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
+  versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
   header.appendChild(versionLabel);
   header.appendChild(closeBtn);
   // Disclaimer under the version label
@@ -300,7 +305,7 @@
     disclaimer.style.cssText = "position:absolute; top:28px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer);
     const disclaimer2 = document.createElement("div");
-    disclaimer2.textContent = "Messages are detected by timestamp, users sharing logs may confuse the extention";
+    disclaimer2.textContent = "Messages are seperated by timestamp, users sharing logs may confuse the extention";
     disclaimer2.style.cssText = "position:absolute; top:42px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer2);
   } catch {}

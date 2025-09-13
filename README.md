@@ -13,7 +13,7 @@ Features
 - Select and copy:
   - Click any message to toggle a gold selection border
   - Click the clipboard icon (beside the Up/Down buttons) to copy selected messages to your clipboard in chronological order
-  - New: eye toggle to show only highlighted or selected messages; hidden runs are collapsed with a "N messages hidden" placeholder
+  - Eye toggle to show only highlighted or selected messages; hidden runs are collapsed with an "N messages hidden" placeholder
 - Ads filter:
   - Toggle to hide messages unless the first non-space character after the timestamp is `*` (emote) or a name ends with `: ` within the first 22 characters
   - Does not hide highlighted or selected messages
@@ -26,7 +26,7 @@ Features
   - Adds a star in front of the tab name when it's an official channel (based on known slugs)
   - Collapse/expand header controls
   - Centered Previous/Next report buttons (styled like header buttons) jump to `?log=<id-1>` and `?log=<id+1>`
-  - Disclaimers under the version label to remind that highlighting/hiding isn’t perfect and timestamp-based detection can be confused by shared logs
+  - Disclaimers under the version label to remind that highlighting/hiding isn't perfect and timestamp-based detection can be confused by shared logs
 - Legend toggles:
   - Click the colored boxes to enable/disable highlighting for Reported, Submitted, and Additional names (saved in your browser)
 - Navigation:
@@ -49,25 +49,26 @@ Notes
 - This extension only reads and re-renders the log page content client-side.
 - No data is sent anywhere; it does not require special permissions.
 
+
 Firefox Version
 ==============
-A Firefox-ready copy is in `../binaries/`.
+A Firefox-ready copy is in `binaries/`.
 
 - Download the latest log_highlighter.xpi file and run it
-- You should get a popup in firefox to add the extention
+- You should get a popup in Firefox to add the extension
 
 
 Chrome Version
 ==============
-A Chrome-ready copy is in `../binaries/`.
+A Chrome-ready copy is in `binaries/`.
 
-- Download fchat-highlighter-firefox.zip, and extract it
-- Go to `chrome://extensions`, enable Developer Mode, click "Load unpacked", select the foldier you just extracted.
+- Download fchat-highlighter-chrome.zip, and extract it
+- Go to `chrome://extensions`, enable Developer Mode, click "Load unpacked", select the folder you just extracted.
 
 
 What's New
 ----------
-2.4
+2.4.1
 - Ads filter toggle with refined logic:
   - Pass if the first non-space character after the timestamp is `*` (emote), or a name ends with `: ` within the first 22 characters.
   - Does not hide highlighted or selected messages.
