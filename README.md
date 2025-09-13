@@ -1,4 +1,4 @@
-F-List Log Highlighter (Firefox)
+F-List Log Highlighter
 ================================
 
 Highlights F-List report logs by re-rendering the page with clearer metadata and color-coding.
