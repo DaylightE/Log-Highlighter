@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "F-List Log Highlighter",
-  "version": "2.4.1",
-  "description": "Highlights Reporting (red), Submitted (blue), and additional (green) names; click messages to select and copy selected to clipboard.",
+  "version": "2.4.3",
+  "description": "Formats f-list log files to be more readable",
   "icons": {
     "128": "icon-128.png",
     "48": "icon-128.png",
@@ -16,7 +16,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://www.f-list.net/fchat/getLog.php*"
+        "*://*.f-list.net/fchat/getLog.php*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

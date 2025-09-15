@@ -1,6 +1,9 @@
 (() => {
   // Only run on the intended page
-  if (!/\/fchat\/getLog\.php/i.test(location.pathname)) return;
+  if (!/\/fchat\/getLog\.php/i.test(location.pathname)) {
+    try { console.warn(`[FHL] Not a log page; path=${location.pathname}`); } catch {}
+    return;
+  }
 
   // If URL contains off flag, strip it from URL and bail (show original page)
   try {
@@ -8,6 +11,7 @@
     if (url.searchParams.get('fhl_off') === '1') {
       url.searchParams.delete('fhl_off');
       history.replaceState(null, '', url.toString());
+      try { console.info('[FHL] Disabled via fhl_off=1 parameter; leaving page unchanged.'); } catch {}
       return;
     }
   } catch {}
@@ -17,6 +21,7 @@
   try {
     if (sessionStorage.getItem(DISABLE_ONCE_KEY) === "1") {
       sessionStorage.removeItem(DISABLE_ONCE_KEY);
+      try { console.info('[FHL] Disabled once via session flag; leaving page unchanged.'); } catch {}
       return;
     }
   } catch {}
@@ -104,7 +109,10 @@
   const fullText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
   // Also keep the raw HTML so we can detect structural markers like <hr/>
   const fullHtml = document.body ? (document.body.innerHTML || "") : "";
-  if (!fullText.trim()) return;
+  if (!fullText.trim()) {
+    try { console.warn('[FHL] Body text is empty; not engaging (page may not be fully loaded).'); } catch {}
+    return;
+  }
 
   // Pull submitter and reporter names
   let submittedBy = null;
@@ -230,7 +238,10 @@
   if (cur) messages.push(cur);
 
   // If nothing to do, bail
-  if (!messages.length) return;
+  if (!messages.length) {
+    try { console.warn('[FHL] No message headers detected; leaving page unchanged.'); } catch {}
+    return;
+  }
 
   // Compute the maximum combined [icon]/[eicon] count in any single message from the reported user
   let maxReportedIcons = 0;
@@ -292,7 +303,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.4.1";
+  versionLabel.textContent = "F-list Log Highlighter v2.4.3";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -301,13 +312,37 @@
   // Disclaimer under the version label
   try {
     const disclaimer = document.createElement("div");
-    disclaimer.textContent = "Highlighting and hiding logic is not perfect, review critical info";
+    disclaimer.textContent = "Message hiding logic is not perfect, review critical info";
     disclaimer.style.cssText = "position:absolute; top:28px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer);
     const disclaimer2 = document.createElement("div");
     disclaimer2.textContent = "Messages are seperated by timestamp, users sharing logs may confuse the extention";
     disclaimer2.style.cssText = "position:absolute; top:42px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer2);
+    // Links under the disclaimers: Guide | Bug reports
+    const linksWrap = document.createElement("div");
+    linksWrap.style.cssText = "position:absolute; top:56px; right:44px; font-size:11px; opacity:0.95; z-index:3; pointer-events:auto;";
+    const guideLink = document.createElement("a");
+    guideLink.href = "https://github.com/DaylightE/Log-Highlighter/blob/main/README.md";
+    guideLink.target = "_blank";
+    guideLink.rel = "noopener noreferrer";
+    guideLink.textContent = "Guide";
+    guideLink.style.cssText = "color:#88b3ff; text-decoration:none;";
+    guideLink.addEventListener("mouseenter", () => { guideLink.style.textDecoration = "underline"; });
+    guideLink.addEventListener("mouseleave", () => { guideLink.style.textDecoration = "none"; });
+    const sep = document.createTextNode(" | ");
+    const bugsLink = document.createElement("a");
+    bugsLink.href = "https://github.com/DaylightE/Log-Highlighter/issues";
+    bugsLink.target = "_blank";
+    bugsLink.rel = "noopener noreferrer";
+    bugsLink.textContent = "Bug reports";
+    bugsLink.style.cssText = "color:#88b3ff; text-decoration:none;";
+    bugsLink.addEventListener("mouseenter", () => { bugsLink.style.textDecoration = "underline"; });
+    bugsLink.addEventListener("mouseleave", () => { bugsLink.style.textDecoration = "none"; });
+    linksWrap.appendChild(guideLink);
+    linksWrap.appendChild(sep);
+    linksWrap.appendChild(bugsLink);
+    header.appendChild(linksWrap);
   } catch {}
   // Top-middle prev/next nav based on ?log= param, styled like header buttons
   try {
@@ -367,7 +402,7 @@
     if (name && name.trim()) {
       strong.appendChild(makeProfileLink(name.trim()));
     } else {
-      strong.textContent = "(unknown)";
+      strong.textContent = "";
     }
     row.appendChild(lab);
     row.appendChild(strong);

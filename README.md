@@ -60,7 +60,10 @@ A Firefox-ready copy is in `binaries/`.
 
 Chrome Version
 ==============
-A Chrome-ready copy is in `binaries/`.
+
+- Click [here](https://chromewebstore.google.com/detail/cnmbdgoiiklkdbinjlcijbggpaaibhjb?utm_source=item-share-cb) to install the extention on the Google Web Store
+
+Alternatively, a Chrome-ready copy is in `binaries/`.
 
 - Download fchat-highlighter-chrome.zip, and extract it
 - Go to `chrome://extensions`, enable Developer Mode, click "Load unpacked", select the folder you just extracted.
@@ -68,7 +71,7 @@ A Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
-2.4.1
+2.4
 - Ads filter toggle with refined logic:
   - Pass if the first non-space character after the timestamp is `*` (emote), or a name ends with `: ` within the first 22 characters.
   - Does not hide highlighted or selected messages.
@@ -102,4 +105,4 @@ What's New
 - ASCII-only header controls to avoid encoding issues
 
 1.3
-- Initial public version with highlighting, extras input, and time conversion
+- Initial version with highlighting, extras input, and time conversion
