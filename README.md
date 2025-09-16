@@ -39,12 +39,6 @@ Features
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
   - One-time disable via 'fhl_off=1' URL param or the close button
 
-Install (temporary, for development)
-1) Open Firefox and go to: about:debugging#/runtime/this-firefox
-2) Click "Load Temporary Add-on"
-3) Select this folder's manifest.json
-4) Visit a log page (e.g. https://www.f-list.net/fchat/getLog.php?log=173488)
-
 Notes
 - This extension only reads and re-renders the log page content client-side.
 - No data is sent anywhere; it does not require special permissions.
