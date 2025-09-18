@@ -33,8 +33,7 @@ Features
   - Up/Down buttons next to 'Additional names' jump between highlighted messages (Reporting user, Log submitter, and Additional names)
   - Keeps your place even after editing the Additional names list
 - Time tools:
-  - Convert all [HH:MM] and [YYYY-MM-DD HH:MM] (with optional AM/PM) to local time
-  - Remembers preference per browser via localStorage
+  - Automatically formats the "Log submitted on" timestamp in your local timezone
 - Extras:
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
   - One-time disable via 'fhl_off=1' URL param or the close button
@@ -65,6 +64,9 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.4.4
+- Automatically localize the "Log submitted on" header timestamp; remove the manual convert button and inline log rewrites due to them not working right. 
+
 2.4
 - Ads filter toggle with refined logic:
   - Pass if the first non-space character after the timestamp is `*` (emote), or a name ends with `: ` within the first 22 characters.

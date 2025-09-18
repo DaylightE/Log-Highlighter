@@ -292,7 +292,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.4.3";
+  versionLabel.textContent = "F-list Log Highlighter v2.4.4";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -410,15 +410,8 @@
     return { row, strong };
   }
   const submittedByRow = appendNameRow("Log submitted by", submittedBy);
-  // Custom row for 'Log submitted on' with a convert-to-local button
-  const { row: submittedOnRow, strong: submittedOnStrong } = appendValueRow("Log submitted on", submittedOn);
-  const convertBtn = document.createElement("button");
-  convertBtn.textContent = "Convert times to local";
-  convertBtn.title = "Convert all [HH:MM] timestamps to your local time";
-  convertBtn.style.cssText = "margin-left:8px; padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
-  convertBtn.addEventListener("mouseenter", () => { convertBtn.style.background = "#1f1f1f"; });
-  convertBtn.addEventListener("mouseleave", () => { convertBtn.style.background = "#151515"; });
-  submittedOnRow.appendChild(convertBtn);
+  // Row for 'Log submitted on' (converted to local automatically)
+  const { strong: submittedOnStrong } = appendValueRow("Log submitted on", submittedOn);
   const reportingUserRow = appendNameRow("Reporting user", reportingUser);
   // Prefix star if tab slug in parentheses matches the allowlist
   let tabDisplay = tabName;
@@ -1146,7 +1139,6 @@
 
   // Load/save preferences via localStorage
   const STORE_KEY = "fchatHighlighterExtras";
-  const CONVERT_STORE_KEY = "fchatHighlighterConvertLocal";
   try {
     const saved = localStorage.getItem(STORE_KEY);
     if (saved) extraInput.value = saved;
@@ -1191,35 +1183,7 @@
       applyVisibility();
     }
 
-  // --- Timestamp conversion ---
-  function parseOffsetMinutesFromSubmittedOn(text) {
-    const m = (text || "").match(/([+-])(\d{2})(\d{2})\b/);
-    if (!m) return 0; // default UTC
-    const sign = m[1] === '-' ? -1 : 1;
-    const hh = parseInt(m[2], 10) || 0;
-    const mm = parseInt(m[3], 10) || 0;
-    return sign * (hh * 60 + mm);
-  }
-  function parseBaseYMD(text) {
-    // Expect formats like: Wed, 10 Sep 2025 16:33:25 +0000
-    const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
-    const m = (text || "").match(/\b(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\b/);
-    if (m && Object.prototype.hasOwnProperty.call(months, m[2])) {
-      return { y: parseInt(m[3], 10), mo: months[m[2]], d: parseInt(m[1], 10) };
-    }
-    try {
-      const d = new Date(text);
-      if (!isNaN(d.getTime())) return { y: d.getUTCFullYear(), mo: d.getUTCMonth(), d: d.getUTCDate() };
-    } catch {}
-    const now = new Date();
-    return { y: now.getFullYear(), mo: now.getMonth(), d: now.getDate() };
-  }
-  function toLocalHHMMFromBase(hh, mm, base, offsetMinutes) {
-    // base is {y, mo, d}; offsetMinutes is the source timezone offset minutes
-    const utcMs = Date.UTC(base.y, base.mo, base.d, hh, mm) - offsetMinutes * 60000;
-    const local = new Date(utcMs);
-    return local.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  }
+  // --- Submitted-on timestamp ---
   function formatLocalRFCish(date) {
     try {
       const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -1233,70 +1197,14 @@
       return `${days[date.getDay()]}, ${pad(date.getDate())} ${months[date.getMonth()]} ${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${sign}${oh}${om}`;
     } catch { return ""; }
   }
-  const srcOffsetMin = parseOffsetMinutesFromSubmittedOn(submittedOn || "");
-  const baseDate = parseBaseYMD(submittedOn || "");
-  const timeReShort = /\[(\d{1,2}):(\d{2})(?:\s*([AP]M))?\]/gi; // [HH:MM][ AM/PM]
-  const timeReLong = /\[(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?:\s*([AP]M))?\]/gi; // [YYYY-MM-DD HH:MM][ AM/PM]
-  function to24h(h, ap) {
-    let hh = Math.max(0, Math.min(23, parseInt(h, 10) || 0));
-    if (!ap) return hh;
-    const up = String(ap).toUpperCase();
-    hh = Math.max(1, Math.min(12, parseInt(h, 10) || 12));
-    if (up === 'AM') return hh % 12; // 12AM -> 0
-    if (up === 'PM') return (hh % 12) + 12; // 12PM -> 12
-    return hh;
-  }
-  let timesConverted = false;
-  const submittedOnOriginal = submittedOnStrong.textContent;
-  function convertAllTimes() {
-    for (const w of wrappers) {
-      let replaced = w.origText
-        .replace(timeReLong, (_, y, mo, d, h, m, ap) => {
-          const yy = parseInt(y, 10);
-          const mm0 = Math.max(1, Math.min(12, parseInt(mo, 10) || 1)) - 1;
-          const dd = Math.max(1, Math.min(31, parseInt(d, 10) || 1));
-          const hh = to24h(h, ap);
-          const mi = Math.max(0, Math.min(59, parseInt(m, 10) || 0));
-          const out = toLocalHHMMFromBase(hh, mi, { y: yy, mo: mm0, d: dd }, srcOffsetMin);
-          return `[${y}-${mo}-${d} ${out}]`;
-        })
-        .replace(timeReShort, (_, h, m, ap) => {
-          const hh = to24h(h, ap);
-          const mi = Math.max(0, Math.min(59, parseInt(m, 10) || 0));
-          const out = toLocalHHMMFromBase(hh, mi, baseDate, srcOffsetMin);
-          return `[${out}]`;
-        });
-      w.pre.textContent = replaced;
-    }
-    // Replace submitted-on time with local formatted time
+  function applySubmittedOnLocal() {
+    if (!submittedOn || !submittedOnStrong) return;
     try {
-      const dt = new Date(submittedOn || "");
+      const dt = new Date(submittedOn);
       if (!isNaN(dt.getTime())) submittedOnStrong.textContent = formatLocalRFCish(dt);
     } catch {}
-    convertBtn.textContent = "Show original times";
-    timesConverted = true;
-    try { localStorage.setItem(CONVERT_STORE_KEY, "1"); } catch {}
   }
-  function restoreAllTimes() {
-    for (const w of wrappers) {
-      w.pre.textContent = w.origText;
-    }
-    // Restore original submitted-on text
-    submittedOnStrong.textContent = submittedOnOriginal;
-    convertBtn.textContent = "Convert times to local";
-    timesConverted = false;
-    try { localStorage.removeItem(CONVERT_STORE_KEY); } catch {}
-  }
-  convertBtn.addEventListener('click', () => {
-    if (timesConverted) restoreAllTimes(); else convertAllTimes();
-  });
-
-  // Apply saved preference for local time conversion
-  try {
-    if (localStorage.getItem(CONVERT_STORE_KEY) === "1") {
-      convertAllTimes();
-    }
-  } catch {}
+  applySubmittedOnLocal();
 
   // Wire events
   extraInput.addEventListener("input", () => {
