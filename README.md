@@ -1,4 +1,4 @@
-F-List Log Highlighter
+﻿F-List Log Highlighter
 ================================
 
 Highlights F-List report logs by re-rendering the page with clearer metadata and color-coding.
@@ -35,6 +35,8 @@ Features
 - Time tools:
   - Automatically formats the "Log submitted on" timestamp in your local timezone
 - Extras:
+  - Compact mode toggle to shrink spacing between messages
+  - Text size controls (-/[Text size]/+) to adjust message font scale
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
   - One-time disable via 'fhl_off=1' URL param or the close button
 
@@ -64,6 +66,11 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.5
+- Add compact mode checkbox to shrink message spacing and remember the preference.
+- Provide persistent text size controls (- / Text size / +) that resize only the log content.
+- Scale message padding and placeholder gaps with text size so tighter fonts stay readable.
+
 2.4.4
 - Automatically localize the "Log submitted on" header timestamp; remove the manual convert button and inline log rewrites due to them not working right. 
 

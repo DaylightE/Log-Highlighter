@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   // Only run on the intended page
   if (!/\/fchat\/getLog\.php/i.test(location.pathname)) {
     try { console.warn(`[FHL] Not a log page; path=${location.pathname}`); } catch {}
@@ -274,10 +274,72 @@
     }
   } catch {}
 
+  const COMPACT_STORE_KEY = "fchatHighlighterCompactMode";
+  const TEXT_SIZE_STORE_KEY = "fchatHighlighterTextScale";
+  const TEXT_SIZE_STEP = 0.1;
+  const TEXT_SIZE_MIN = 0.5;
+  const TEXT_SIZE_MAX = 1.5;
+
+  function clampTextScale(value) {
+    return Math.min(TEXT_SIZE_MAX, Math.max(TEXT_SIZE_MIN, value));
+  }
+
+  let textScale = 1;
+  try {
+    const savedScale = parseFloat(localStorage.getItem(TEXT_SIZE_STORE_KEY) || "");
+    if (!Number.isNaN(savedScale)) textScale = savedScale;
+  } catch {}
+  textScale = clampTextScale(textScale);
+
+  let compactMode = false;
+  try {
+    compactMode = localStorage.getItem(COMPACT_STORE_KEY) === "1";
+  } catch {}
+
+  let textSizeDisplay = null;
+  let textSizeDecrease = null;
+  let textSizeIncrease = null;
+  let container = null;
+
+  function updateTextSizeControls() {
+    if (textSizeDisplay) textSizeDisplay.textContent = `Text size: ${Math.round(textScale * 100)}%`;
+    const decDisabled = textScale <= TEXT_SIZE_MIN + 1e-3;
+    if (textSizeDecrease) {
+      textSizeDecrease.disabled = decDisabled;
+      textSizeDecrease.style.opacity = decDisabled ? "0.5" : "1";
+      textSizeDecrease.style.cursor = decDisabled ? "not-allowed" : "pointer";
+      textSizeDecrease.style.background = decDisabled ? "#101010" : "#151515";
+    }
+    const incDisabled = textScale >= TEXT_SIZE_MAX - 1e-3;
+    if (textSizeIncrease) {
+      textSizeIncrease.disabled = incDisabled;
+      textSizeIncrease.style.opacity = incDisabled ? "0.5" : "1";
+      textSizeIncrease.style.cursor = incDisabled ? "not-allowed" : "pointer";
+      textSizeIncrease.style.background = incDisabled ? "#101010" : "#151515";
+    }
+  }
+
+  function applyTextSize() {
+    if (container) {
+      container.style.fontSize = `${(textScale * 100).toFixed(2)}%`;
+    }
+    updateTextSizeControls();
+  }
+
+  function adjustTextScale(delta) {
+    const next = clampTextScale(Math.round((textScale + delta) * 100) / 100);
+    if (Math.abs(next - textScale) < 1e-4) return;
+    textScale = next;
+    try { localStorage.setItem(TEXT_SIZE_STORE_KEY, textScale.toString()); } catch {}
+    applyTextSize();
+    applyCompactModeStyles();
+  }
+
   // Clear the page and inject our structured view
   document.documentElement.style.background = "#0b0b0b"; // dark back helps highlights stand out
   document.body.innerHTML = "";
   document.body.style.cssText = "margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; background:#0b0b0b; color:#e6e6e6;";
+  applyTextSize();
 
   // Header info / legend
   const header = document.createElement("div");
@@ -303,7 +365,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.4.4";
+  versionLabel.textContent = "F-list Log Highlighter v2.5";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -427,7 +489,7 @@
   // Prefix star if tab slug in parentheses matches the allowlist
   let tabDisplay = tabName;
   const tabSlug = extractParenSlug(tabName);
-  if (tabSlug && STAR_TAB_SLUGS.has(canonSlug(tabSlug))) tabDisplay = `\u2605${tabName}`; // ★
+  if (tabSlug && STAR_TAB_SLUGS.has(canonSlug(tabSlug))) tabDisplay = `\u2605${tabName}`; // U+2605 (star)
   appendValueRow("Tab", tabDisplay);
   
   // Gender extraction from profile pages
@@ -568,13 +630,13 @@
   extraWrap.appendChild(extraInput);
   // Navigation buttons to jump between highlighted messages
   const navBtnUp = document.createElement("button");
-  navBtnUp.textContent = "\u25B2"; // ▲
+  navBtnUp.textContent = "\u25B2"; // U+25B2 (up triangle)
   navBtnUp.title = "Previous highlighted message";
   navBtnUp.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
   navBtnUp.addEventListener("mouseenter", () => { navBtnUp.style.background = "#1f1f1f"; });
   navBtnUp.addEventListener("mouseleave", () => { navBtnUp.style.background = "#151515"; });
   const navBtnDown = document.createElement("button");
-  navBtnDown.textContent = "\u25BC"; // ▼
+  navBtnDown.textContent = "\u25BC"; // U+25BC (down triangle)
   navBtnDown.title = "Next highlighted message";
   navBtnDown.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
   navBtnDown.addEventListener("mouseenter", () => { navBtnDown.style.background = "#1f1f1f"; });
@@ -754,7 +816,7 @@
 
   // Collapse toggle (arrow at bottom middle of header)
   const collapseBtn = document.createElement("button");
-  collapseBtn.textContent = "▴";
+  collapseBtn.textContent = "v";
   collapseBtn.title = "Collapse header";
   // Ensure ASCII-only label to avoid encoding issues
   try { collapseBtn.textContent = "v"; } catch {}
@@ -762,15 +824,89 @@
   collapseBtn.addEventListener("mouseenter", () => { collapseBtn.style.background = "#1f1f1f"; });
   collapseBtn.addEventListener("mouseleave", () => { collapseBtn.style.background = "#151515"; });
   header.appendChild(collapseBtn);
+  // Text size controls (above compact mode)
+  const textSizeWrap = document.createElement("div");
+  textSizeWrap.style.cssText = "position:absolute; bottom:70px; right:8px; display:flex; align-items:center; gap:8px; font-size:12px; color:#ccc; user-select:none; z-index:2;";
+  const textSizeDecreaseBtn = document.createElement("button");
+  textSizeDecreaseBtn.textContent = "-";
+  textSizeDecreaseBtn.style.cssText = "width:24px; height:22px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+  textSizeDecreaseBtn.addEventListener("mouseenter", () => { if (!textSizeDecreaseBtn.disabled) textSizeDecreaseBtn.style.background = "#1f1f1f"; });
+  textSizeDecreaseBtn.addEventListener("mouseleave", () => { textSizeDecreaseBtn.style.background = textSizeDecreaseBtn.disabled ? "#101010" : "#151515"; });
+  const textSizeDisplaySpan = document.createElement("span");
+  textSizeDisplaySpan.style.cssText = "min-width:128px; text-align:center; letter-spacing:0.4px; color:#e6e6e6;";
+  const textSizeIncreaseBtn = document.createElement("button");
+  textSizeIncreaseBtn.textContent = "+";
+  textSizeIncreaseBtn.style.cssText = "width:24px; height:22px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer;";
+  textSizeIncreaseBtn.addEventListener("mouseenter", () => { if (!textSizeIncreaseBtn.disabled) textSizeIncreaseBtn.style.background = "#1f1f1f"; });
+  textSizeIncreaseBtn.addEventListener("mouseleave", () => { textSizeIncreaseBtn.style.background = textSizeIncreaseBtn.disabled ? "#101010" : "#151515"; });
+  textSizeWrap.appendChild(textSizeDecreaseBtn);
+  textSizeWrap.appendChild(textSizeDisplaySpan);
+  textSizeWrap.appendChild(textSizeIncreaseBtn);
+  header.appendChild(textSizeWrap);
+
+  textSizeDecrease = textSizeDecreaseBtn;
+  textSizeIncrease = textSizeIncreaseBtn;
+  textSizeDisplay = textSizeDisplaySpan;
+
+  textSizeDecreaseBtn.addEventListener("click", () => adjustTextScale(-TEXT_SIZE_STEP));
+  textSizeIncreaseBtn.addEventListener("click", () => adjustTextScale(TEXT_SIZE_STEP));
+
   // Max icon counter (bottom-right)
+  const compactModeLabel = document.createElement("label");
+  compactModeLabel.style.cssText = "position:absolute; bottom:34px; right:8px; display:flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px; cursor:pointer;";
+  compactModeLabel.title = "Toggle compact spacing";
+  const compactModeCheckbox = document.createElement("input");
+  compactModeCheckbox.type = "checkbox";
+  compactModeCheckbox.checked = compactMode;
+  compactModeCheckbox.style.margin = "0";
+  const compactModeText = document.createElement("span");
+  compactModeText.textContent = "Compact mode";
+  const compactModeBox = document.createElement("span");
+  compactModeBox.style.cssText = "width:16px; height:16px; border:1px solid #555; border-radius:3px; background:#000; display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:#f7f9fc; font-weight:bold; transition:background 0.15s ease, border-color 0.15s ease;";
+  compactModeBox.setAttribute("aria-hidden", "true");
+  compactModeLabel.appendChild(compactModeBox);
+  compactModeLabel.appendChild(compactModeText);
+  compactModeLabel.appendChild(compactModeCheckbox);
+  compactModeLabel.style.position = "absolute";
+  compactModeCheckbox.style.position = "absolute";
+  compactModeCheckbox.style.left = "8px";
+  compactModeCheckbox.style.top = "50%";
+  compactModeCheckbox.style.transform = "translateY(-50%)";
+  compactModeCheckbox.style.width = "16px";
+  compactModeCheckbox.style.height = "16px";
+  compactModeCheckbox.style.opacity = "0";
+  compactModeCheckbox.style.cursor = "pointer";
+  compactModeCheckbox.style.padding = "0";
+  compactModeCheckbox.style.zIndex = "1";
+  header.appendChild(compactModeLabel);
+
   const maxIconBadge = document.createElement("div");
   maxIconBadge.style.cssText = "position:absolute; bottom:6px; right:8px; padding:2px 6px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px;";
   maxIconBadge.textContent = `Reported max eicons: ${maxReportedIcons}`;
   header.appendChild(maxIconBadge);
 
+  function updateCompactModeLabelState() {
+    const isOn = compactMode;
+    compactModeLabel.style.borderColor = isOn ? "#4f86ff" : "#333";
+    compactModeLabel.style.color = isOn ? "#e6e6e6" : "#ccc";
+    compactModeBox.style.background = isOn ? "#4f86ff" : "#000";
+    compactModeBox.style.borderColor = isOn ? "#4f86ff" : "#555";
+    compactModeBox.textContent = isOn ? String.fromCharCode(0x2713) : "";
+  }
+  updateCompactModeLabelState();
+  compactModeCheckbox.addEventListener("change", () => {
+    compactMode = compactModeCheckbox.checked;
+    try { localStorage.setItem(COMPACT_STORE_KEY, compactMode ? "1" : "0"); } catch {}
+    updateCompactModeLabelState();
+    applyCompactModeStyles();
+    applyVisibility();
+  });
+
+  applyTextSize();
+
   // Restore button (shows only when header collapsed)
   const restoreBtn = document.createElement("button");
-  restoreBtn.textContent = "▾";
+  restoreBtn.textContent = "^";
   restoreBtn.title = "Expand header";
   // Ensure ASCII-only label to avoid encoding issues
   try { restoreBtn.textContent = "^"; } catch {}
@@ -790,7 +926,7 @@
   document.body.appendChild(header);
   document.body.appendChild(restoreBtn);
 
-  const container = document.createElement("div");
+  container = document.createElement("div");
   container.style.cssText = "padding: 12px 16px; display:flex; flex-direction:column; gap:8px;";
   document.body.appendChild(container);
 
@@ -799,9 +935,42 @@
   const reportName = reportingUserRaw;
   const wrappers = [];
 
+  function applyCompactModeToWrap(wrap) {
+    if (!wrap) return;
+    const padY = ((compactMode ? 2 : 8) * textScale).toFixed(2);
+    const padX = ((compactMode ? 6 : 10) * textScale).toFixed(2);
+    wrap.style.padding = `${padY}px ${padX}px`;
+    wrap.style.lineHeight = compactMode ? "1.15" : "1.35";
+    wrap.style.borderRadius = compactMode ? "4px" : "6px";
+  }
+
+  function stylePlaceholderElement(el) {
+    if (!el) return;
+    const margin = ((compactMode ? 2 : 6) * textScale).toFixed(2);
+    const padY = ((compactMode ? 3 : 6) * textScale).toFixed(2);
+    const padX = ((compactMode ? 5 : 8) * textScale).toFixed(2);
+    el.style.margin = `${margin}px 0`;
+    el.style.padding = `${padY}px ${padX}px`;
+  }
+
+  function applyCompactModeStyles() {
+    if (!container) return;
+    const baseGap = compactMode ? 2 : 8;
+    const gapPx = (baseGap * textScale).toFixed(2);
+    container.style.gap = `${gapPx}px`;
+    for (const { wrap } of wrappers) {
+      applyCompactModeToWrap(wrap);
+    }
+    const placeholders = container.querySelectorAll('[data-fhl-placeholder="1"], [data-fhl-placeholder-ads="1"]');
+    placeholders.forEach(ph => stylePlaceholderElement(ph));
+  }
+
+  applyCompactModeStyles();
+
   for (const msg of messages) {
     const wrap = document.createElement("div");
     wrap.style.cssText = "border-radius:6px; padding:8px 10px; white-space:pre-wrap; line-height:1.35;";
+    applyCompactModeToWrap(wrap);
 
     const s = msg.afterNoStar || "";
     if (afterStartsWithName(s, reportName)) {
@@ -846,6 +1015,8 @@
 
     wrappers.push({ wrap, pre, msg, origText: pre.textContent });
   }
+
+  applyCompactModeStyles();
 
   // --- Highlight navigation helpers ---
   let navList = [];
@@ -912,7 +1083,8 @@
       ph.dataset.start = String(groupStart);
       ph.dataset.count = String(count);
       ph.dataset.open = open ? '1' : '0';
-      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      ph.style.cssText = "color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      stylePlaceholderElement(ph);
       ph.textContent = open ? `Hide ${count} messages` : `${count} messages hidden`;
         ph.addEventListener('click', () => {
           const start = parseInt(ph.dataset.start || '-1', 10);
@@ -1059,7 +1231,8 @@
       ph.dataset.start = String(groupStart);
       ph.dataset.count = String(count);
       ph.dataset.open = open ? '1' : '0';
-      ph.style.cssText = "margin:6px 0; padding:6px 8px; color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      ph.style.cssText = "color:#9aa7bd; font-style:italic; border:1px dashed #333; border-radius:4px; background:#0f0f0f; cursor:pointer;";
+      stylePlaceholderElement(ph);
       ph.textContent = open ? `Hide ${count} ads` : `${count} ads hidden`;
       ph.addEventListener('click', () => {
         const start = parseInt(ph.dataset.start || '-1', 10);
@@ -1221,4 +1394,6 @@
 
   // Initial highlight pass
   updateHighlights();
+  applyCompactModeStyles();
+  applyTextSize();
 })();
