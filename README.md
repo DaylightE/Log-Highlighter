@@ -56,7 +56,7 @@ A Firefox-ready copy is in `binaries/`.
 Chrome Version
 ==============
 
-- Click [here](https://chromewebstore.google.com/detail/cnmbdgoiiklkdbinjlcijbggpaaibhjb?utm_source=item-share-cb) to install the extention on the Google Web Store
+- Click [here](https://chromewebstore.google.com/detail/cnmbdgoiiklkdbinjlcijbggpaaibhjb?utm_source=item-share-cb) to install the extension on the Google Web Store
 
 Alternatively, a Chrome-ready copy is in `binaries/`.
 
@@ -66,6 +66,9 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.6
+- Copying selected messages now inserts a zero-width space into the timestamp so pasting back into chat keeps them in a single block instead of being treated as separate messages.
+
 2.5
 - Add compact mode checkbox to shrink message spacing and remember the preference.
 - Provide persistent text size controls (- / Text size / +) that resize only the log content.

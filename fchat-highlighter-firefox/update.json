@@ -3,8 +3,8 @@
     "fchat-highlighter@example.com": {
       "updates": [
         {
-          "version": "2.5",
-          "update_link": "https://raw.githubusercontent.com/DaylightE/Log-Highlighter/main/binaries/log_highlighter-2.5.xpi",
+          "version": "2.6",
+          "update_link": "https://raw.githubusercontent.com/DaylightE/Log-Highlighter/main/binaries/log_highlighter-2.6.xpi",
           "applications": {
             "gecko": {
               "strict_min_version": "109.0"

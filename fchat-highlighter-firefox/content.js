@@ -354,7 +354,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.5";
+  versionLabel.textContent = "F-list Log Highlighter v2.6";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -367,7 +367,7 @@
     disclaimer.style.cssText = "position:absolute; top:28px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer);
     const disclaimer2 = document.createElement("div");
-    disclaimer2.textContent = "Messages are seperated by timestamp, users sharing logs may confuse the extention";
+    disclaimer2.textContent = "Messages are seperated by timestamp, users sharing logs may confuse the extension";
     disclaimer2.style.cssText = "position:absolute; top:42px; right:44px; color:#9aa7bd; font-size:11px; opacity:0.9;";
     header.appendChild(disclaimer2);
     // Links under the disclaimers: Guide | Bug reports
@@ -663,6 +663,24 @@
     copyBtn.addEventListener("mouseleave", () => { copyBtn.style.background = "#151515"; });
   copyBtn.addEventListener('click', async () => {
     try {
+      // Insert a zero-width space into the timestamp to avoid re-parsing as a new message when pasted
+      const addZwsToTimestampLine = (line) => {
+        if (!tsStartRe.test(line)) return line;
+        const open = line.indexOf('[');
+        const close = line.indexOf(']', open + 1);
+        if (open === -1 || close === -1) return line;
+        const ts = line.slice(open + 1, close);
+        if (!ts) return line;
+        const mid = Math.floor(ts.length / 2);
+        const tsWithZws = `${ts.slice(0, mid)}\u200b${ts.slice(mid)}`;
+        return `${line.slice(0, open + 1)}${tsWithZws}${line.slice(close)}`;
+      };
+      const obfuscateTimestampInBlock = (blockText) => {
+        const parts = String(blockText || "").split("\n");
+        if (!parts.length) return "";
+        parts[0] = addZwsToTimestampLine(parts[0]);
+        return parts.join("\n");
+      };
       // Collect in chronological order (wrappers insertion order)
       const selected = wrappers.filter(w => w && w.wrap && w.wrap.dataset && w.wrap.dataset.fhlSelected === '1');
         if (!selected.length) {
@@ -670,7 +688,7 @@
           setTimeout(() => { try { setCopyBtnIcon(); } catch {} }, 1200);
           return;
         }
-      const text = selected.map(w => w.pre && w.pre.textContent ? w.pre.textContent : '').join('\n');
+      const text = selected.map(w => obfuscateTimestampInBlock(w.pre && w.pre.textContent ? w.pre.textContent : '')).join('\n');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
