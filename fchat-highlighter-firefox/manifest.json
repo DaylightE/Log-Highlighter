@@ -1,7 +1,7 @@
 ﻿{
   "manifest_version": 3,
   "name": "F-List Log Highlighter",
-  "version": "2.6",
+  "version": "2.7",
   "description": "Formats f-list log files to be more readable",
   "icons": {
     "128": "icon-128.png",

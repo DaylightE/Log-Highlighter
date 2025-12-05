@@ -66,6 +66,9 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.7
+- Accept timestamps that include seconds, e.g. `[06:28:20 PM]`, in both header parsing and inline detection.
+
 2.6
 - Copying selected messages now inserts a zero-width space into the timestamp so pasting back into chat keeps them in a single block instead of being treated as separate messages.
 

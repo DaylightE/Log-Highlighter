@@ -76,8 +76,8 @@
   }
 
   // Detect a line that starts a new message: [HH:MM] or [HH:MM AM/PM] or [YYYY-MM-DD HH:MM] with optional AM/PM
-  const headerRe = /^\s*\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]\s*(.*)$/i;
-  const tsStartRe = /^\s*\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]/i;
+  const headerRe = /^\s*\[(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]\s*(.*)$/i;
+  const tsStartRe = /^\s*\[(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]/i;
 
   // Ads filter refined:
   // - Spare if the first non-space character after timestamp is '*'
@@ -175,13 +175,13 @@
 
     if (!emptyViaHr) {
       // First attempt: stop at start-of-line timestamp
-      let m = fullText.match(/Report text:\s*([\s\S]*?)(?=\r?\n\s*\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]|$)/i);
+      let m = fullText.match(/Report text:\s*([\s\S]*?)(?=\r?\n\s*\[(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]|$)/i);
       if (!m) {
         // Fallback: allow inline timestamp immediately after report text (no newline)
         const rtIdx = fullText.search(/Report text:/i);
         if (rtIdx !== -1) {
           const after = fullText.slice(rtIdx + (fullText.match(/Report text:/i) || [])[0].length);
-          const tsIdx = after.search(/\[(?:\d{1,2}:\d{2}(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\]/i);
+          const tsIdx = after.search(/\[(?:\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?|\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]/i);
           if (tsIdx > 0) {
             m = [null, after.slice(0, tsIdx)];
           }
@@ -354,7 +354,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.6";
+  versionLabel.textContent = "F-list Log Highlighter v2.7";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
