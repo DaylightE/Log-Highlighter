@@ -66,7 +66,7 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
-2.7
+2.7.1
 - Accept timestamps that include seconds, e.g. `[06:28:20 PM]`, in both header parsing and inline detection.
 
 2.6

@@ -109,7 +109,14 @@
   const fullText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
   // Also keep the raw HTML so we can detect structural markers like <hr/>
   const fullHtml = document.body ? (document.body.innerHTML || "") : "";
-  if (!fullText.trim()) {
+  // Prefer <pre> for message parsing so newline-only messages aren't collapsed away.
+  let messageText = fullText;
+  try {
+    const pre = document.querySelector("pre");
+    const preText = pre ? (pre.textContent || "") : "";
+    if (preText.length > 0) messageText = preText;
+  } catch {}
+  if (!fullText.trim() && !messageText.trim()) {
     try { console.warn('[FHL] Body text is empty; not engaging (page may not be fully loaded).'); } catch {}
     return;
   }
@@ -211,7 +218,7 @@
   const reportingUserRaw = (reportingUser || "").trim();
 
   // Split into lines and group messages: header line -> body until next header
-  const lines = fullText.split(/\r?\n/);
+  const lines = messageText.split(/\r?\n/);
   const messages = []; // {afterNoStar: string, afterWithSpaces: string, blockLines: string[]}
   let cur = null;
 
@@ -365,7 +372,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.7";
+  versionLabel.textContent = "F-list Log Highlighter v2.7.1";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
