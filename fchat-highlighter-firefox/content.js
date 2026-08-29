@@ -361,7 +361,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.7.1";
+  versionLabel.textContent = "F-list Log Highlighter v2.8.0";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -563,6 +563,488 @@
       .then(html => parseGenderFromHtml(html))
       .catch(() => null);
   }
+
+  // Ignore-evasion check helpers. Data from staff pages stays in this function scope and
+  // is discarded as soon as the check is complete.
+  const FHL_SITE_ORIGIN = "https://www.f-list.net";
+  const FHL_IGNORE_EVASION_ANNOUNCEMENT_KEY = "fchatHighlighterIgnoreEvasionAnnouncementShown";
+  const FHL_IGNORE_EVASION_ANNOUNCEMENT_END = new Date(2026, 9, 2);
+
+  function fhlCanonicalName(name) {
+    try {
+      return String(name || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+    } catch {
+      return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+    }
+  }
+
+  function fhlProfileUrl(name) {
+    return `${FHL_SITE_ORIGIN}/c/${encodeURIComponent(String(name || "").trim())}`;
+  }
+
+  function fhlStripUserTags(value) {
+    return String(value || "").replace(/\[\/?user(?:=[^\]]*)?\]/gi, "");
+  }
+
+  function fhlLookupCharacterValue(character) {
+    if (character && typeof character === "object") {
+      for (const field of ["name", "character_name", "character", "title", "url", "href"]) {
+        if (character[field]) return String(character[field]);
+      }
+      return "";
+    }
+    return String(character || "");
+  }
+
+  function fhlCharacterNameFromValue(value) {
+    let text = fhlLookupCharacterValue(value).trim();
+    try {
+      const url = new URL(text, FHL_SITE_ORIGIN);
+      const match = url.pathname.match(/^\/c\/([^/]+)/i);
+      if (match) text = match[1];
+    } catch {}
+    text = text.replace(/^\/?c\//i, "").replace(/\/$/, "").replace(/\+/g, " ");
+    // Lookup results can be URL-encoded more than once, while ignore-list links
+    // are normally decoded once by the browser. Normalize both representations.
+    for (let pass = 0; pass < 3; pass++) {
+      try {
+        const decoded = decodeURIComponent(text);
+        if (decoded === text) break;
+        text = decoded;
+      } catch { break; }
+    }
+    return fhlStripUserTags(text).trim();
+  }
+
+  function fhlComparableCharacterName(value) {
+    return fhlCanonicalName(fhlCharacterNameFromValue(value))
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .replace(/\s+/g, " ");
+  }
+
+  function fhlLooseCharacterKey(value) {
+    return fhlComparableCharacterName(value).replace(/[^a-z0-9]/g, "");
+  }
+
+  function fhlAdminNoteUrl(name) {
+    // F-List staff-note character lookups use the lower-case character name with spaces.
+    // The browser will encode the spaces for the HTTP request as required by URL syntax.
+    return `${FHL_SITE_ORIGIN}/panel/adminnote.php?character=${String(name || "").trim().toLocaleLowerCase()}`;
+  }
+
+  function fhlParseDocument(html) {
+    return new DOMParser().parseFromString(String(html || ""), "text/html");
+  }
+
+  function fhlGetPasswordForm(doc) {
+    const passwordForms = Array.from(doc.querySelectorAll("form")).filter(form => form.querySelector('input[type="password"]'));
+    // The site header also contains a login form. Prefer the page-level challenge,
+    // which preserves the return URL for the requested staff page.
+    return passwordForms.find(form => form.querySelector('input[name="returnto"]')) || passwordForms[0] || null;
+  }
+
+  function fhlTrace(trace, message) {
+    if (Array.isArray(trace)) trace.push(`${String(trace.length + 1).padStart(2, "0")}. ${message}`);
+  }
+
+  function fhlTraceNameList(trace, label, characters) {
+    if (!Array.isArray(trace)) return;
+    const names = (characters || []).map(character => String(character?.name || "").trim()).filter(Boolean);
+    fhlTrace(trace, `${label}: ${names.length} name${names.length === 1 ? "" : "s"} saved.\n${names.map((name, index) => `    ${index + 1}. ${name}`).join("\n") || "    (none)"}`);
+  }
+
+  function fhlTraceUrl(url) {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return String(url || "");
+    }
+  }
+
+  function fhlRuntimeMessage(message) {
+    return new Promise((resolve, reject) => {
+      const browserRuntime = globalThis.browser?.runtime;
+      const runtime = browserRuntime || globalThis.chrome?.runtime;
+      if (!runtime?.sendMessage) {
+        reject(new Error("The extension cannot open the F-List sign-in tab."));
+        return;
+      }
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        callback(value);
+      };
+      try {
+        const result = browserRuntime
+          ? runtime.sendMessage(message)
+          : runtime.sendMessage(message, response => {
+            const lastError = globalThis.chrome?.runtime?.lastError;
+            if (lastError) finish(reject, new Error(lastError.message));
+            else finish(resolve, response);
+          });
+        if (result && typeof result.then === "function") result.then(response => finish(resolve, response), error => finish(reject, error));
+      } catch (error) {
+        finish(reject, error);
+      }
+    });
+  }
+
+  function fhlDelay(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+  }
+
+  async function fhlAuthenticateInNewTab(url, trace, label) {
+    fhlTrace(trace, `${label || "F-List page"}: authentication is required; opening the requested page in a new tab.`);
+    const opened = await fhlRuntimeMessage({ type: "fhl-auth-tab", action: "open", url });
+    if (!opened?.tabId) throw new Error(opened?.error || "The F-List sign-in tab could not be opened.");
+    const deadline = Date.now() + 15 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await fhlDelay(1000);
+      try {
+        const response = await fetch(url, { credentials: "include" });
+        if (response.status === 401) continue;
+        if (!response.ok) throw new Error(`F-List returned HTTP ${response.status} while waiting for sign-in.`);
+        const html = await response.text();
+        if (fhlGetPasswordForm(fhlParseDocument(html))) continue;
+        await fhlRuntimeMessage({ type: "fhl-auth-tab", action: "close", tabId: opened.tabId, returnTabId: opened.sourceTabId });
+        fhlTrace(trace, `${label || "F-List page"}: sign-in completed; authentication tab closed and check resumed.`);
+        return html;
+      } catch (error) {
+        if (error instanceof Error && /^F-List returned HTTP/.test(error.message)) throw error;
+      }
+    }
+    throw new Error("F-List sign-in was not completed within 15 minutes. The sign-in tab has been left open.");
+  }
+
+  async function fhlFetchStaffHtml(url, trace, label) {
+    fhlTrace(trace, `${label || "F-List page"}: requesting ${fhlTraceUrl(url)}.`);
+    let response = await fetch(url, { credentials: "include" });
+    fhlTrace(trace, `${label || "F-List page"}: received HTTP ${response.status} from ${fhlTraceUrl(response.url || url)}.`);
+    if (response.status === 401) return fhlAuthenticateInNewTab(url, trace, label);
+    if (!response.ok) throw new Error(`F-List returned HTTP ${response.status}.`);
+    let html = await response.text();
+    let doc = fhlParseDocument(html);
+    const passwordForm = fhlGetPasswordForm(doc);
+    if (!passwordForm) {
+      fhlTrace(trace, `${label || "F-List page"}: no password form detected.`);
+      return html;
+    }
+
+    return fhlAuthenticateInNewTab(url, trace, label);
+  }
+
+  function fhlIgnoreEntriesIn(container) {
+    if (!container) return [];
+    const found = new Map();
+    const add = (name, href) => {
+      const cleanedName = fhlStripUserTags(name).replace(/^\s*[•·-]\s*/, "").trim();
+      const key = fhlCanonicalName(cleanedName);
+      const profileHref = href && /\/c\//i.test(href) ? href : null;
+      if (key && !found.has(key)) found.set(key, {
+        name: cleanedName,
+        href: profileHref || fhlProfileUrl(cleanedName),
+        comparisonValue: profileHref || cleanedName
+      });
+    };
+    for (const link of container.querySelectorAll('a[href]')) {
+      let linkUrl;
+      try { linkUrl = new URL(link.getAttribute("href"), FHL_SITE_ORIGIN).toString(); } catch {}
+      const name = (link.textContent || "").trim();
+      add(name, linkUrl);
+    }
+    if (found.size) return Array.from(found.values());
+
+    // F-List has used both links and plain text rows for this list. Keep the
+    // line-oriented fallback restricted to the ignore-list container.
+    const rowsHtml = (container.innerHTML || "")
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:div|li|p|tr|td)\s*>/gi, "\n");
+    const text = fhlParseDocument(rowsHtml).body.textContent || "";
+    for (const row of text.split(/\r?\n/)) {
+      const name = row.trim();
+      if (!name || /this\s+user\s+is\s+ignoring/i.test(name) || name.length > 120) continue;
+      add(name);
+    }
+    return Array.from(found.values());
+  }
+
+  function fhlExtractIgnoredCharacters(html) {
+    const source = String(html || "");
+    const ignoreHeading = /this\s+user\s+is\s+ignoring\b/i;
+    const doc = fhlParseDocument(source);
+    const heading = Array.from(doc.querySelectorAll("h1, h2, h3, h4, h5, h6")).find(element => ignoreHeading.test(element.textContent || ""));
+    if (heading) {
+      for (let element = heading.nextElementSibling; element; element = element.nextElementSibling) {
+        const profiles = fhlIgnoreEntriesIn(element);
+        if (profiles.length) return profiles;
+        if (/^H[1-6]$/.test(element.tagName)) break;
+      }
+    }
+
+    // Some staff pages wrap this block differently. Limit the raw section to the
+    // ignore list, then parse its profile links instead of relying on sibling layout.
+    const marker = source.search(ignoreHeading);
+    if (marker < 0) return [];
+    let section = source.slice(marker);
+    const sectionEnd = section.search(/<div\b[^>]*\bid\s*=\s*["']AdminNoteBox["']|<h[1-6]\b/i);
+    if (sectionEnd > 0) section = section.slice(0, sectionEnd);
+    return fhlIgnoreEntriesIn(fhlParseDocument(section).body);
+  }
+
+  function fhlExtractAccountId(html) {
+    const doc = fhlParseDocument(html);
+    for (const label of doc.querySelectorAll(".label")) {
+      if (/^account\s*id$/i.test((label.textContent || "").trim())) {
+        const match = (label.nextElementSibling?.textContent || "").match(/\d+/);
+        if (match) return match[0];
+      }
+    }
+    const hidden = doc.querySelector('input[name="account_id"]');
+    if (hidden && /^\d+$/.test(hidden.value || "")) return hidden.value;
+    const link = Array.from(doc.querySelectorAll('a[href*="lookup.php?acctid="]')).find(Boolean);
+    if (link) {
+      try { return new URL(link.href).searchParams.get("acctid") || null; } catch {}
+    }
+    const fallback = (doc.body?.textContent || "").match(/account\s*id\s*(?:<[^>]*>)*\s*(\d+)/i);
+    return fallback ? fallback[1] : null;
+  }
+
+  function fhlExtractCsrfToken(html) {
+    const doc = fhlParseDocument(html);
+    return doc.querySelector('meta[name="csrf-token"], meta#flcsrf-token')?.getAttribute("content")
+      || doc.querySelector('input[name="csrf_token"]')?.value
+      || null;
+  }
+
+  async function fhlLookupActiveCharacters(accountId, trace) {
+    const lookupPage = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/lookup.php?acctid=${encodeURIComponent(accountId)}`, trace, "Moderation-tool page");
+    const csrfToken = fhlExtractCsrfToken(lookupPage);
+    if (!csrfToken) throw new Error("The moderation tool did not provide its security token.");
+    fhlTrace(trace, "Moderation-tool page: security token found (value not logged).");
+    fhlTrace(trace, `Moderation lookup: requesting active characters for account ID ${accountId}.`);
+    const response = await fetch(`${FHL_SITE_ORIGIN}/json/lookup.json`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: new URLSearchParams({ type: "aid", query: String(accountId), alts: "", csrf_token: csrfToken }).toString()
+    });
+    fhlTrace(trace, `Moderation lookup: received HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(`The moderation lookup returned HTTP ${response.status}.`);
+    const data = await response.json();
+    if (data?.error) throw new Error(`The moderation lookup failed: ${data.error}`);
+    const account = (data?.accounts || []).find(item => String(item.account_id) === String(accountId)) || data?.accounts?.[0];
+    if (!account || !Array.isArray(account.characters)) throw new Error("The moderation lookup did not return a character list.");
+    const characters = account.characters
+      .map(character => {
+        const comparisonValue = fhlLookupCharacterValue(character);
+        const name = fhlCharacterNameFromValue(comparisonValue);
+        return name ? { name, href: fhlProfileUrl(name), comparisonValue } : null;
+      })
+      .filter(Boolean);
+    fhlTrace(trace, `Moderation lookup: extracted ${characters.length} active character${characters.length === 1 ? "" : "s"}.`);
+    fhlTrace(trace, `Moderation lookup: normalized active names: ${characters.map(character => JSON.stringify(character.name)).join(", ") || "(none)"}.`);
+    fhlTraceNameList(trace, "Moderation lookup active characters", characters);
+    return characters;
+  }
+
+  function fhlExtractAltAccountIds(html, primaryAccountId) {
+    const accountIds = new Set();
+    const doc = fhlParseDocument(html);
+    for (const link of doc.querySelectorAll('a[href*="adminnote.php?accountid="]')) {
+      try {
+        const url = new URL(link.getAttribute("href"), FHL_SITE_ORIGIN);
+        if (!/\/panel\/adminnote\.php$/i.test(url.pathname)) continue;
+        const accountId = url.searchParams.get("accountid");
+        if (/^\d+$/.test(accountId || "") && String(accountId) !== String(primaryAccountId)) accountIds.add(accountId);
+      } catch {}
+    }
+    return Array.from(accountIds);
+  }
+
+  async function fhlLookupAltActiveCharacters(accountId, trace) {
+    const altsHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/alts.php?account=${encodeURIComponent(accountId)}`, trace, "Alt-accounts page");
+    const altAccountIds = fhlExtractAltAccountIds(altsHtml, accountId);
+    const characters = [];
+    for (const altAccountId of altAccountIds) {
+      const altCharacters = await fhlLookupActiveCharacters(altAccountId, trace);
+      characters.push(...altCharacters.map(character => ({ ...character, alt: true })));
+    }
+    return characters;
+  }
+
+  function fhlExtractDeletedCharacters(html) {
+    const doc = fhlParseDocument(html);
+    const content = doc.querySelector("#Content") || doc.body;
+    const found = new Map();
+    const walker = doc.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
+    let node;
+    while ((node = walker.nextNode())) {
+      const match = (node.nodeValue || "").match(/^\s*(.+?),\s*character\s+id\s+\d+\s*,\s*$/i);
+      if (!match) continue;
+      const name = fhlStripUserTags(match[1]).trim();
+      const key = fhlCanonicalName(name);
+      if (key && !found.has(key)) found.set(key, { name, href: fhlProfileUrl(name), comparisonValue: name });
+    }
+    return Array.from(found.values());
+  }
+
+  function fhlShowIgnoreEvasionResult(matches, error) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.82); z-index:2147483647;";
+    const dialog = document.createElement("div");
+    dialog.style.cssText = "width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 64px); overflow:auto; padding:18px; border:1px solid #444; border-radius:8px; background:#000; color:#e6e6e6; box-shadow:0 18px 45px rgba(0,0,0,.65); font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;";
+    const heading = document.createElement("div");
+    heading.style.cssText = "font-weight:bold; margin-bottom:10px;";
+    if (error) {
+      heading.textContent = "Ignore-evasion check could not finish";
+      const details = document.createElement("div");
+      details.textContent = error;
+      details.style.cssText = "color:#ffb4b4; font-size:13px; line-height:1.4;";
+      dialog.append(heading, details);
+    } else if (!matches.length) {
+      heading.textContent = "No matches on ignore list";
+      dialog.appendChild(heading);
+    } else {
+      heading.textContent = "Reported user's characters on reporter's ignore list:";
+      const list = document.createElement("div");
+      list.style.cssText = "line-height:1.65;";
+      for (const match of matches) {
+        const item = document.createElement("div");
+        const link = document.createElement("a");
+        link.href = match.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = match.name;
+        link.style.cssText = "color:#88b3ff;";
+        item.appendChild(link);
+        if (match.deleted) item.appendChild(document.createTextNode(" (deleted)"));
+        if (match.alt) item.appendChild(document.createTextNode(" (alt account)"));
+        list.appendChild(item);
+      }
+      dialog.append(heading, list);
+    }
+    const disclaimer = document.createElement("div");
+    disclaimer.textContent = "Checking characters and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
+    disclaimer.style.cssText = "margin-top:16px; color:#9aa7bd; font-size:11px; line-height:1.35;";
+    dialog.appendChild(disclaimer);
+    const close = document.createElement("button");
+    close.textContent = "Close";
+    close.style.cssText = "display:block; margin:16px 0 0 auto; padding:6px 10px; border:1px solid #42516d; border-radius:4px; background:#151515; color:#e6e6e6; cursor:pointer;";
+    const dismiss = () => overlay.remove();
+    close.addEventListener("click", dismiss);
+    overlay.addEventListener("mousedown", event => { if (event.target === overlay) dismiss(); });
+    dialog.appendChild(close);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+  }
+
+  function fhlShowIgnoreEvasionAnnouncement(button) {
+    if (Date.now() >= FHL_IGNORE_EVASION_ANNOUNCEMENT_END.getTime()) return;
+    try {
+      if (localStorage.getItem(FHL_IGNORE_EVASION_ANNOUNCEMENT_KEY) === "1") return;
+      // Record it when it is shown, so it can never be displayed more than once.
+      localStorage.setItem(FHL_IGNORE_EVASION_ANNOUNCEMENT_KEY, "1");
+    } catch {}
+
+    const bubble = document.createElement("div");
+    bubble.setAttribute("role", "status");
+    bubble.style.cssText = "position:fixed; z-index:2147483647; box-sizing:border-box; width:min(390px, calc(100vw - 24px)); padding:14px; border:1px solid #64748b; border-radius:8px; background:#171717; color:#f2f5fa; box-shadow:0 12px 32px rgba(0,0,0,.6); font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;";
+    const message = document.createElement("div");
+    message.textContent = "New feature! Is opening up 4 different tabs to confirm an ignore evasion tedious? Well, labour no more! Introducing 1 click ignore evasion checking, including checking deleted characters and alt accounts! Rejoice!";
+    const praise = document.createElement("button");
+    praise.type = "button";
+    praise.textContent = "Praise Ariana";
+    praise.style.cssText = "display:block; margin:12px 0 0 auto; padding:6px 10px; border:1px solid #668ee6; border-radius:4px; background:#284b88; color:#fff; cursor:pointer; font:inherit;";
+    const arrow = document.createElement("div");
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.style.cssText = "position:absolute; width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;";
+    bubble.append(message, praise, arrow);
+
+    let dismissed = false;
+    const position = () => {
+      if (dismissed || !button.isConnected || !bubble.isConnected) return;
+      const buttonBox = button.getBoundingClientRect();
+      const padding = 12;
+      const bubbleWidth = bubble.offsetWidth;
+      const left = Math.max(padding, Math.min(buttonBox.left + (buttonBox.width / 2) - (bubbleWidth / 2), window.innerWidth - bubbleWidth - padding));
+      const topAbove = buttonBox.top - bubble.offsetHeight - 14;
+      const above = topAbove >= padding;
+      const top = above ? topAbove : Math.min(buttonBox.bottom + 14, Math.max(padding, window.innerHeight - bubble.offsetHeight - padding));
+      const arrowLeft = Math.max(9, Math.min(buttonBox.left + (buttonBox.width / 2) - left - 9, bubbleWidth - 27));
+      bubble.style.left = `${left}px`;
+      bubble.style.top = `${top}px`;
+      arrow.style.left = `${arrowLeft}px`;
+      if (above) {
+        arrow.style.top = "auto";
+        arrow.style.bottom = "-9px";
+        arrow.style.borderTop = "9px solid #171717";
+        arrow.style.borderBottom = "0";
+      } else {
+        arrow.style.top = "-9px";
+        arrow.style.bottom = "auto";
+        arrow.style.borderTop = "0";
+        arrow.style.borderBottom = "9px solid #171717";
+      }
+    };
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      window.removeEventListener("resize", position);
+      bubble.remove();
+    };
+    praise.addEventListener("click", dismiss);
+    document.body.appendChild(bubble);
+    position();
+    window.addEventListener("resize", position);
+    requestAnimationFrame(position);
+  }
+
+  async function fhlCheckIgnoreEvasion(submitterName, reportedName, trace) {
+    fhlTrace(trace, "Ignore-evasion check started.");
+    fhlTrace(trace, `Log metadata: submitter="${submitterName || "(missing)"}", reported user="${reportedName || "(missing)"}".`);
+    if (!submitterName || !reportedName) throw new Error("The log is missing the submitter or reported-user name.");
+    const ignoredHtml = await fhlFetchStaffHtml(fhlAdminNoteUrl(submitterName), trace, "Submitter staff note");
+    const ignoredCharacters = fhlExtractIgnoredCharacters(ignoredHtml);
+    fhlTrace(trace, `Submitter staff note: extracted ${ignoredCharacters.length} ignored character${ignoredCharacters.length === 1 ? "" : "s"}.`);
+    fhlTraceNameList(trace, "Submitter ignore list", ignoredCharacters);
+    if (!ignoredCharacters.length) throw new Error(`No ignore list was found on the staff note for "${submitterName}".`);
+
+    const reportedHtml = await fhlFetchStaffHtml(fhlAdminNoteUrl(reportedName), trace, "Reported-user staff note");
+    const accountId = fhlExtractAccountId(reportedHtml);
+    fhlTrace(trace, accountId ? `Reported-user staff note: account ID ${accountId} extracted.` : "Reported-user staff note: account ID was not found.");
+    if (!accountId) throw new Error("The reported user's account ID was not found in their staff note.");
+
+    const activeCharacters = await fhlLookupActiveCharacters(accountId, trace);
+    const altActiveCharacters = await fhlLookupAltActiveCharacters(accountId, trace);
+    const deletedHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/deletedchars.php?accountid=${encodeURIComponent(accountId)}`, trace, "Deleted-characters page");
+    const deletedCharacters = fhlExtractDeletedCharacters(deletedHtml).map(character => ({ ...character, deleted: true }));
+    fhlTrace(trace, `Deleted-characters page: extracted ${deletedCharacters.length} deleted character${deletedCharacters.length === 1 ? "" : "s"}.`);
+    const allCharacters = [...activeCharacters, ...deletedCharacters, ...altActiveCharacters];
+    fhlTraceNameList(trace, "Deleted characters", deletedCharacters);
+    fhlTraceNameList(trace, "All reported-account characters", allCharacters);
+    fhlTrace(trace, `Comparison input: ${ignoredCharacters.length} ignored name${ignoredCharacters.length === 1 ? "" : "s"}; ${allCharacters.length} active/deleted character${allCharacters.length === 1 ? "" : "s"}.`);
+    const ignoredByName = new Set(ignoredCharacters.map(character => fhlComparableCharacterName(character.comparisonValue || character.name)));
+    const ignoredDisplayNames = new Set(ignoredCharacters.map(character => fhlCanonicalName(character.name)));
+    const ignoredLooseNames = new Set(ignoredCharacters.map(character => fhlLooseCharacterKey(character.comparisonValue || character.name)));
+    const matches = [];
+    const seen = new Set();
+    for (const character of allCharacters) {
+      const key = fhlComparableCharacterName(character.comparisonValue || character.name);
+      const displayKey = fhlCanonicalName(character.name);
+      const looseKey = fhlLooseCharacterKey(character.comparisonValue || character.name);
+      const matchType = ignoredByName.has(key) ? "canonical profile/name" : ignoredDisplayNames.has(displayKey) ? "display name" : ignoredLooseNames.has(looseKey) ? "separator-insensitive" : null;
+      fhlTrace(trace, `Comparison candidate: ${JSON.stringify(character.name)}; canonical=${JSON.stringify(key)}; loose=${JSON.stringify(looseKey)}; ${matchType ? `matched by ${matchType}` : "no match"}.`);
+      if (matchType && !seen.has(looseKey)) {
+        seen.add(looseKey);
+        matches.push(character);
+      }
+    }
+    fhlTrace(trace, `Comparison complete: ${matches.length} matching character${matches.length === 1 ? "" : "s"}.`);
+    return matches;
+  }
+
   // Before gender loads, color names grey
   function presetGrey(rowObj) {
     if (!rowObj) return;
@@ -860,10 +1342,38 @@
   compactModeCheckbox.style.zIndex = "1";
   header.appendChild(compactModeLabel);
 
+  const ignoreEvasionWrap = document.createElement("div");
+  ignoreEvasionWrap.style.cssText = "position:absolute; bottom:6px; right:8px; display:flex; align-items:center; gap:6px;";
+  const ignoreEvasionBtn = document.createElement("button");
+  ignoreEvasionBtn.textContent = "Ignore evasion?";
+  ignoreEvasionBtn.title = "Compare the submitter's ignore list with the reported account's active and deleted characters";
+  ignoreEvasionBtn.style.cssText = "padding:2px 6px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px; cursor:pointer;";
+  ignoreEvasionBtn.addEventListener("mouseenter", () => { if (!ignoreEvasionBtn.disabled) ignoreEvasionBtn.style.background = "#1f1f1f"; });
+  ignoreEvasionBtn.addEventListener("mouseleave", () => { ignoreEvasionBtn.style.background = ignoreEvasionBtn.disabled ? "#101010" : "#151515"; });
+  ignoreEvasionBtn.addEventListener("click", async () => {
+    ignoreEvasionBtn.disabled = true;
+    ignoreEvasionBtn.textContent = "Checking…";
+    ignoreEvasionBtn.style.cursor = "wait";
+    ignoreEvasionBtn.style.opacity = "0.7";
+    try {
+      const matches = await fhlCheckIgnoreEvasion(submittedByRaw, reportingUserRaw);
+      fhlShowIgnoreEvasionResult(matches, null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+      fhlShowIgnoreEvasionResult([], message);
+    } finally {
+      ignoreEvasionBtn.disabled = false;
+      ignoreEvasionBtn.textContent = "Ignore evasion?";
+      ignoreEvasionBtn.style.cursor = "pointer";
+      ignoreEvasionBtn.style.opacity = "1";
+    }
+  });
   const maxIconBadge = document.createElement("div");
-  maxIconBadge.style.cssText = "position:absolute; bottom:6px; right:8px; padding:2px 6px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px;";
+  maxIconBadge.style.cssText = "padding:2px 6px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px;";
   maxIconBadge.textContent = `Reported max eicons: ${maxReportedIcons}`;
-  header.appendChild(maxIconBadge);
+  ignoreEvasionWrap.append(ignoreEvasionBtn, maxIconBadge);
+  header.appendChild(ignoreEvasionWrap);
+  fhlShowIgnoreEvasionAnnouncement(ignoreEvasionBtn);
 
   function updateCompactModeLabelState() {
     const isOn = compactMode;
