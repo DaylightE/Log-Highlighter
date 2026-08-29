@@ -25,7 +25,7 @@ Features
     - Uses 'Gender:' from the user's profile page
   - Adds a star in front of the tab name when it's an official channel (based on known slugs)
   - Collapse/expand header controls
-  - Centered Previous/Next report buttons (styled like header buttons) jump to `?log=<id-1>` and `?log=<id+1>`
+  - Centered Previous/Next report buttons plus a `>>` button for the most recent report
   - Disclaimers under the version label to remind that highlighting/hiding isn't perfect and timestamp-based detection can be confused by shared logs
 - Legend toggles:
   - Click the colored boxes to enable/disable highlighting for Reported, Submitted, and Additional names (saved in your browser)

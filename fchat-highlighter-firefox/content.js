@@ -104,6 +104,14 @@
   const fullText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
   // Also keep the raw HTML so we can detect structural markers like <hr/>
   const fullHtml = document.body ? (document.body.innerHTML || "") : "";
+  // Preserve the site's native latest-report target before replacing the page DOM.
+  let latestReportUrl = null;
+  try {
+    const latestReportLink = Array.from(document.querySelectorAll("a[href]")).find(link =>
+      link.textContent.trim() === ">>" && /\/fchat\/getLog\.php(?:\?|$)/i.test(link.href)
+    );
+    if (latestReportLink) latestReportUrl = latestReportLink.href;
+  } catch {}
   // Prefer <pre> for message parsing so newline-only messages aren't collapsed away.
   let messageText = fullText;
   try {
@@ -410,14 +418,18 @@
     if (!isNaN(logNum)) {
       const navWrap = document.createElement('div');
       navWrap.style.cssText = "position:absolute; top:8px; left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center; z-index:2;";
-      function makeNavBtn(label, to) {
+      function makeNavBtn(label, title, onClick) {
         const btn = document.createElement('button');
         btn.textContent = label;
-        btn.title = label === '<' ? `Previous report (${to})` : `Next report (${to})`;
+        btn.title = title;
         btn.style.cssText = "padding:4px 8px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; cursor:pointer; font-weight:bold;";
         btn.addEventListener('mouseenter', () => { btn.style.background = '#1f1f1f'; });
         btn.addEventListener('mouseleave', () => { btn.style.background = '#151515'; });
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', onClick);
+        return btn;
+      }
+      function goToLog(to) {
+        return () => {
           try {
             const newUrl = new URL(location.href);
             newUrl.searchParams.set('log', String(to));
@@ -425,13 +437,16 @@
           } catch {
             location.assign(`?log=${to}`);
           }
-        });
-        return btn;
+        };
       }
-      const prevB = makeNavBtn('<', logNum - 1);
-      const nextB = makeNavBtn('>', logNum + 1);
+      const prevB = makeNavBtn('<', `Previous report (${logNum - 1})`, goToLog(logNum - 1));
+      const nextB = makeNavBtn('>', `Next report (${logNum + 1})`, goToLog(logNum + 1));
       navWrap.appendChild(prevB);
       navWrap.appendChild(nextB);
+      if (latestReportUrl) {
+        const latestB = makeNavBtn('>>', 'Most recent report', () => location.assign(latestReportUrl));
+        navWrap.appendChild(latestB);
+      }
       header.appendChild(navWrap);
     }
   } catch {}
