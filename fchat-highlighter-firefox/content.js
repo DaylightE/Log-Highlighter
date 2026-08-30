@@ -584,6 +584,21 @@
   const FHL_SITE_ORIGIN = "https://www.f-list.net";
   const FHL_IGNORE_EVASION_ANNOUNCEMENT_KEY = "fchatHighlighterIgnoreEvasionAnnouncementShown";
   const FHL_IGNORE_EVASION_ANNOUNCEMENT_END = new Date(2026, 9, 2);
+  const FHL_SHOW_DIAGNOSTICS_EVENT = "fhl-show-diagnostics";
+  const FHL_DIAGNOSTICS_VISIBLE_ATTRIBUTE = "data-fhl-diagnostics-visible";
+
+  function fhlDiagnosticsVisible() {
+    return document.documentElement?.getAttribute(FHL_DIAGNOSTICS_VISIBLE_ATTRIBUTE) === "true";
+  }
+
+  document.addEventListener(FHL_SHOW_DIAGNOSTICS_EVENT, () => {
+    document.documentElement?.setAttribute(FHL_DIAGNOSTICS_VISIBLE_ATTRIBUTE, "true");
+    for (const details of document.querySelectorAll("[data-fhl-diagnostics]")) {
+      details.hidden = false;
+      details.open = true;
+    }
+    try { console.info("[FHL] Diagnostics are now visible for this page."); } catch {}
+  });
 
   function fhlCanonicalName(name) {
     try {
@@ -741,6 +756,7 @@
     if (!response.ok) throw new Error(`F-List returned HTTP ${response.status}.`);
     let html = await response.text();
     let doc = fhlParseDocument(html);
+    fhlTrace(trace, `${label || "F-List page"}: parsed ${html.length} HTML character${html.length === 1 ? "" : "s"}; title=${JSON.stringify((doc.title || "").trim() || "(none)")}; #Content=${doc.querySelector("#Content") ? "present" : "missing"}.`);
     const passwordForm = fhlGetPasswordForm(doc);
     if (!passwordForm) {
       fhlTrace(trace, `${label || "F-List page"}: no password form detected.`);
@@ -912,23 +928,50 @@
     return Array.from(found.values());
   }
 
-  function fhlExtractDeletedCharacters(html) {
+  function fhlExtractDeletedCharacters(html, trace) {
     const doc = fhlParseDocument(html);
     const content = doc.querySelector("#Content") || doc.body;
     const found = new Map();
+    const contentSource = doc.querySelector("#Content") ? "#Content" : "document body";
+    let textNodeCount = 0;
+    let characterIdNodeCount = 0;
+    let rejectedCandidateCount = 0;
+    fhlTrace(trace, `Deleted-character parser: scanning ${contentSource}; HTML length=${String(html || "").length}; title=${JSON.stringify((doc.title || "").trim() || "(none)")}.`);
     const walker = doc.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
     let node;
     while ((node = walker.nextNode())) {
-      const match = (node.nodeValue || "").match(/^\s*(.+?),\s*character\s+id\s+\d+\s*,\s*$/i);
+      const rawText = node.nodeValue || "";
+      if (!rawText.trim()) continue;
+      textNodeCount++;
+      const mentionsCharacterId = /character\s+id/i.test(rawText);
+      if (mentionsCharacterId) characterIdNodeCount++;
+      const match = rawText.match(/^\s*(.+?),\s*character\s+id\s+\d+\s*,\s*$/i);
+      if (!match && mentionsCharacterId) {
+        rejectedCandidateCount++;
+        fhlTrace(trace, `Deleted-character parser: rejected character-ID text node because it did not match "name, character ID number," exactly: ${JSON.stringify(rawText.trim().slice(0, 500))}.`);
+      }
       if (!match) continue;
       const name = fhlStripUserTags(match[1]).trim();
       const key = fhlCanonicalName(name);
-      if (key && !found.has(key)) found.set(key, { name, href: fhlProfileUrl(name), comparisonValue: name });
+      if (!key) {
+        rejectedCandidateCount++;
+        fhlTrace(trace, `Deleted-character parser: rejected an exact row because its extracted name was empty; row=${JSON.stringify(rawText.trim().slice(0, 500))}.`);
+      } else if (found.has(key)) {
+        fhlTrace(trace, `Deleted-character parser: ignored duplicate normalized name ${JSON.stringify(name)} (key=${JSON.stringify(key)}).`);
+      } else {
+        found.set(key, { name, href: fhlProfileUrl(name), comparisonValue: name });
+        fhlTrace(trace, `Deleted-character parser: accepted ${JSON.stringify(name)} (key=${JSON.stringify(key)}).`);
+      }
     }
+    if (!characterIdNodeCount) {
+      const combinedPreview = String(content?.textContent || "").trim().replace(/\s+/g, " ").slice(0, 2000);
+      fhlTrace(trace, `Deleted-character parser: no individual text node mentioned "character ID". Combined deleted-page text preview (first 2,000 characters): ${JSON.stringify(combinedPreview || "(empty)")}.`);
+    }
+    fhlTrace(trace, `Deleted-character parser summary: ${textNodeCount} non-empty text node${textNodeCount === 1 ? "" : "s"}; ${characterIdNodeCount} mentioned "character ID"; ${found.size} accepted; ${rejectedCandidateCount} rejected.`);
     return Array.from(found.values());
   }
 
-  function fhlShowIgnoreEvasionResult(matches, error) {
+  function fhlShowIgnoreEvasionResult(matches, error, trace) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.82); z-index:2147483647;";
     const dialog = document.createElement("div");
@@ -968,6 +1011,36 @@
     disclaimer.textContent = "Checking characters, renames and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
     disclaimer.style.cssText = "margin-top:16px; color:#9aa7bd; font-size:11px; line-height:1.35;";
     dialog.appendChild(disclaimer);
+    const traceEntries = Array.isArray(trace) ? trace : [];
+    const traceDetails = document.createElement("details");
+    traceDetails.setAttribute("data-fhl-diagnostics", "");
+    traceDetails.hidden = !fhlDiagnosticsVisible();
+    traceDetails.open = fhlDiagnosticsVisible();
+    traceDetails.style.cssText = "margin-top:14px; border-top:1px solid #252525; padding-top:10px;";
+    const traceSummary = document.createElement("summary");
+    traceSummary.textContent = `Diagnostic log (${traceEntries.length} entries)`;
+    traceSummary.style.cssText = "cursor:pointer; color:#a9c4f5; font-size:12px;";
+    const traceWarning = document.createElement("div");
+    traceWarning.textContent = "This log can contain character names and account IDs. Review it before sharing.";
+    traceWarning.style.cssText = "margin:8px 0; color:#d6b77a; font-size:11px; line-height:1.35;";
+    const traceText = traceEntries.join("\n");
+    const tracePre = document.createElement("pre");
+    tracePre.textContent = traceText || "No diagnostic entries were recorded.";
+    tracePre.style.cssText = "max-height:280px; overflow:auto; margin:0; padding:9px; border:1px solid #292929; border-radius:4px; background:#090909; color:#c9d1d9; white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;";
+    const copyTrace = document.createElement("button");
+    copyTrace.type = "button";
+    copyTrace.textContent = "Copy diagnostic log";
+    copyTrace.style.cssText = "display:block; margin:8px 0 0 auto; padding:4px 7px; border:1px solid #42516d; border-radius:4px; background:#151515; color:#dce7fb; cursor:pointer; font-size:11px;";
+    copyTrace.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(traceText);
+        copyTrace.textContent = "Copied";
+      } catch {
+        copyTrace.textContent = "Copy failed — select the log text";
+      }
+    });
+    traceDetails.append(traceSummary, traceWarning, tracePre, copyTrace);
+    dialog.appendChild(traceDetails);
     const close = document.createElement("button");
     close.textContent = "Close";
     close.style.cssText = "display:block; margin:16px 0 0 auto; padding:6px 10px; border:1px solid #42516d; border-radius:4px; background:#151515; color:#e6e6e6; cursor:pointer;";
@@ -1060,7 +1133,7 @@
     const renamedCharacters = fhlExtractRenamedCharacters(reportedHtml);
     fhlTrace(trace, `Reported-user staff note: extracted ${renamedCharacters.length} rename target${renamedCharacters.length === 1 ? "" : "s"}.`);
     const deletedHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/deletedchars.php?accountid=${encodeURIComponent(accountId)}`, trace, "Deleted-characters page");
-    const deletedCharacters = fhlExtractDeletedCharacters(deletedHtml).map(character => ({ ...character, deleted: true }));
+    const deletedCharacters = fhlExtractDeletedCharacters(deletedHtml, trace).map(character => ({ ...character, deleted: true }));
     fhlTrace(trace, `Deleted-characters page: extracted ${deletedCharacters.length} deleted character${deletedCharacters.length === 1 ? "" : "s"}.`);
     const allCharacters = [...activeCharacters, ...deletedCharacters, ...renamedCharacters, ...altCharacters];
     fhlTraceNameList(trace, "Deleted characters", deletedCharacters);
@@ -1393,17 +1466,22 @@
   ignoreEvasionBtn.addEventListener("mouseenter", () => { if (!ignoreEvasionBtn.disabled) ignoreEvasionBtn.style.background = "#1f1f1f"; });
   ignoreEvasionBtn.addEventListener("mouseleave", () => { ignoreEvasionBtn.style.background = ignoreEvasionBtn.disabled ? "#101010" : "#151515"; });
   ignoreEvasionBtn.addEventListener("click", async () => {
+    const trace = [];
     ignoreEvasionBtn.disabled = true;
     ignoreEvasionBtn.textContent = "Checking…";
     ignoreEvasionBtn.style.cursor = "wait";
     ignoreEvasionBtn.style.opacity = "0.7";
     try {
-      const matches = await fhlCheckIgnoreEvasion(submittedByRaw, reportingUserRaw);
-      fhlShowIgnoreEvasionResult(matches, null);
+      const matches = await fhlCheckIgnoreEvasion(submittedByRaw, reportingUserRaw, trace);
+      fhlShowIgnoreEvasionResult(matches, null, trace);
     } catch (error) {
       const message = error instanceof Error ? error.message : "An unexpected error occurred.";
-      fhlShowIgnoreEvasionResult([], message);
+      fhlTrace(trace, `Check stopped with error: ${message}`);
+      fhlShowIgnoreEvasionResult([], message, trace);
     } finally {
+      if (fhlDiagnosticsVisible()) {
+        try { console.info("[FHL] Ignore-evasion diagnostic log\n" + trace.join("\n")); } catch {}
+      }
       ignoreEvasionBtn.disabled = false;
       ignoreEvasionBtn.textContent = "Ignore evasion?";
       ignoreEvasionBtn.style.cursor = "pointer";

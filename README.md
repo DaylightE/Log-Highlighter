@@ -72,6 +72,7 @@ What's New
 - Add an "Ignore evasion?" button beside the reported maximum eicon count. It compares the submitter's ignore list with active and deleted characters on the reported account and links any matches.
 - Include active characters on the reported account's linked alt accounts in ignore-evasion checks, labelling matching characters as "(alt account)".
 - Include character rename targets from the reported account and linked alt accounts in ignore-evasion checks, labelling rename-derived matches as "(renamed)" alongside any other applicable labels.
+- Add an opt-in, copyable diagnostic log to ignore-evasion results, including detailed deleted-character request and parsing information. Run `document.dispatchEvent(new Event("fhl-show-diagnostics"))` in the log page console to reveal it.
 - Add a one-time Ignore evasion feature announcement, available through October 1, 2026.
 
 2.6
