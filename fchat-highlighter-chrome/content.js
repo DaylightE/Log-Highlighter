@@ -380,7 +380,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.8.0";
+  versionLabel.textContent = "F-list Log Highlighter v2.8.1";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });
@@ -889,15 +889,38 @@
     return Array.from(accountIds);
   }
 
-  async function fhlLookupAltActiveCharacters(accountId, trace) {
+  async function fhlLookupAltCharacters(accountId, trace) {
     const altsHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/alts.php?account=${encodeURIComponent(accountId)}`, trace, "Alt-accounts page");
     const altAccountIds = fhlExtractAltAccountIds(altsHtml, accountId);
     const characters = [];
     for (const altAccountId of altAccountIds) {
       const altCharacters = await fhlLookupActiveCharacters(altAccountId, trace);
       characters.push(...altCharacters.map(character => ({ ...character, alt: true })));
+      const altStaffHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/adminnote.php?accountid=${encodeURIComponent(altAccountId)}`, trace, `Alt-account ${altAccountId} staff note`);
+      const renamedCharacters = fhlExtractRenamedCharacters(altStaffHtml);
+      fhlTrace(trace, `Alt-account ${altAccountId} staff note: extracted ${renamedCharacters.length} rename target${renamedCharacters.length === 1 ? "" : "s"}.`);
+      characters.push(...renamedCharacters.map(character => ({ ...character, alt: true })));
     }
     return characters;
+  }
+
+  function fhlExtractRenamedCharacters(html) {
+    const doc = fhlParseDocument(html);
+    const content = doc.querySelector("#Content") || doc.body;
+    const found = new Map();
+    const addMatches = text => {
+      const renamePattern = /\brenamed\s+to\s+(.{1,120}?)\s+by\s+the\s+user\s*\./gi;
+      let match;
+      while ((match = renamePattern.exec(String(text || "")))) {
+        const name = fhlStripUserTags(match[1]).trim();
+        const key = fhlCanonicalName(name);
+        if (key && !found.has(key)) found.set(key, { name, href: fhlProfileUrl(name), comparisonValue: name, renamed: true });
+      }
+    };
+    const walker = doc.createTreeWalker(content, 4); // NodeFilter.SHOW_TEXT
+    let node;
+    while ((node = walker.nextNode())) addMatches(node.nodeValue);
+    return Array.from(found.values());
   }
 
   function fhlExtractDeletedCharacters(html) {
@@ -947,12 +970,13 @@
         item.appendChild(link);
         if (match.deleted) item.appendChild(document.createTextNode(" (deleted)"));
         if (match.alt) item.appendChild(document.createTextNode(" (alt account)"));
+        if (match.renamed) item.appendChild(document.createTextNode(" (renamed)"));
         list.appendChild(item);
       }
       dialog.append(heading, list);
     }
     const disclaimer = document.createElement("div");
-    disclaimer.textContent = "Checking characters and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
+    disclaimer.textContent = "Checking characters, renames and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
     disclaimer.style.cssText = "margin-top:16px; color:#9aa7bd; font-size:11px; line-height:1.35;";
     dialog.appendChild(disclaimer);
     const close = document.createElement("button");
@@ -1043,14 +1067,17 @@
     if (!accountId) throw new Error("The reported user's account ID was not found in their staff note.");
 
     const activeCharacters = await fhlLookupActiveCharacters(accountId, trace);
-    const altActiveCharacters = await fhlLookupAltActiveCharacters(accountId, trace);
+    const altCharacters = await fhlLookupAltCharacters(accountId, trace);
+    const renamedCharacters = fhlExtractRenamedCharacters(reportedHtml);
+    fhlTrace(trace, `Reported-user staff note: extracted ${renamedCharacters.length} rename target${renamedCharacters.length === 1 ? "" : "s"}.`);
     const deletedHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/deletedchars.php?accountid=${encodeURIComponent(accountId)}`, trace, "Deleted-characters page");
     const deletedCharacters = fhlExtractDeletedCharacters(deletedHtml).map(character => ({ ...character, deleted: true }));
     fhlTrace(trace, `Deleted-characters page: extracted ${deletedCharacters.length} deleted character${deletedCharacters.length === 1 ? "" : "s"}.`);
-    const allCharacters = [...activeCharacters, ...deletedCharacters, ...altActiveCharacters];
+    const allCharacters = [...activeCharacters, ...deletedCharacters, ...renamedCharacters, ...altCharacters];
     fhlTraceNameList(trace, "Deleted characters", deletedCharacters);
+    fhlTraceNameList(trace, "Reported-account rename targets", renamedCharacters);
     fhlTraceNameList(trace, "All reported-account characters", allCharacters);
-    fhlTrace(trace, `Comparison input: ${ignoredCharacters.length} ignored name${ignoredCharacters.length === 1 ? "" : "s"}; ${allCharacters.length} active/deleted character${allCharacters.length === 1 ? "" : "s"}.`);
+    fhlTrace(trace, `Comparison input: ${ignoredCharacters.length} ignored name${ignoredCharacters.length === 1 ? "" : "s"}; ${allCharacters.length} active/deleted/renamed character name${allCharacters.length === 1 ? "" : "s"}.`);
     const ignoredByName = new Set(ignoredCharacters.map(character => fhlComparableCharacterName(character.comparisonValue || character.name)));
     const ignoredDisplayNames = new Set(ignoredCharacters.map(character => fhlCanonicalName(character.name)));
     const ignoredLooseNames = new Set(ignoredCharacters.map(character => fhlLooseCharacterKey(character.comparisonValue || character.name)));

@@ -38,7 +38,7 @@ Features
   - Compact mode toggle to shrink spacing between messages
   - Text size controls (-/[Text size]/+) to adjust message font scale
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
-  - "Ignore evasion?" checks whether the log submitter ignores an active or deleted character on the reported account, including active characters on linked alt accounts; matching profile names are shown as links
+  - "Ignore evasion?" checks whether the log submitter ignores an active, deleted, or renamed character on the reported account, including active and renamed characters on linked alt accounts; matching profile names are shown as links
     - Uses the signed-in F-List staff session only. If authentication is required, the extension opens the requested F-List page in a new active tab; after you finish signing in there, it automatically closes that tab and resumes the check. The extension never receives or saves your credentials.
   - One-time disable via 'fhl_off=1' URL param or the close button
 
@@ -68,9 +68,10 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
-2.8.0
+2.8.1
 - Add an "Ignore evasion?" button beside the reported maximum eicon count. It compares the submitter's ignore list with active and deleted characters on the reported account and links any matches.
 - Include active characters on the reported account's linked alt accounts in ignore-evasion checks, labelling matching characters as "(alt account)".
+- Include character rename targets from the reported account and linked alt accounts in ignore-evasion checks, labelling rename-derived matches as "(renamed)" alongside any other applicable labels.
 - Add a one-time Ignore evasion feature announcement, available through October 1, 2026.
 
 2.6
