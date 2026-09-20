@@ -369,7 +369,7 @@
   versionLabel.href = "https://github.com/DaylightE/Log-Highlighter/tree/main";
   versionLabel.target = "_blank";
   versionLabel.rel = "noopener noreferrer";
-  versionLabel.textContent = "F-list Log Highlighter v2.8.1";
+  versionLabel.textContent = "F-list Log Highlighter v2.9.0";
   versionLabel.style.cssText = "position:absolute; top:12px; right:44px; color:#88b3ff; font-size:12px; text-decoration:none; cursor:pointer; z-index:2;";
   versionLabel.addEventListener("mouseenter", () => { versionLabel.style.textDecoration = "underline"; });
   versionLabel.addEventListener("mouseleave", () => { versionLabel.style.textDecoration = "none"; });

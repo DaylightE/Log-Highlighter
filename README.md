@@ -69,6 +69,10 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.9.0
+- Add Compare banlist beside the ignore-evasion button to check pasted channel bans against the reported account and linked alt accounts.
+- Check deleted characters on linked alt accounts in both comparison tools, preserving deleted, alt-account, and renamed labels.
+
 2.8.1
 - Add an "Ignore evasion?" button beside the reported maximum eicon count. It compares the submitter's ignore list with active and deleted characters on the reported account and links any matches.
 - Include active characters on the reported account's linked alt accounts in ignore-evasion checks, labelling matching characters as "(alt account)".
