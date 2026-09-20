@@ -38,8 +38,9 @@ Features
   - Compact mode toggle to shrink spacing between messages
   - Text size controls (-/[Text size]/+) to adjust message font scale
   - Computes and displays the maximum [icon]/[eicon] count for the reported user
-  - "Ignore evasion?" checks whether the log submitter ignores an active, deleted, or renamed character on the reported account, including active and renamed characters on linked alt accounts; matching profile names are shown as links
+  - "Ignore evasion?" checks whether the log submitter ignores an active, deleted, or renamed character on the reported account, including active, deleted, and renamed characters on linked alt accounts; matching profile names are shown as links
     - Uses the signed-in F-List staff session only. If authentication is required, the extension opens the requested F-List page in a new active tab; after you finish signing in there, it automatically closes that tab and resumes the check. The extension never receives or saves your credentials.
+  - "Compare banlist" prompts for a channel ban message or comma-separated names and checks active, deleted, and renamed characters on the reported account and linked alt accounts. Results link matching profiles and label deleted, renamed, and alt-account matches. Names are used only for the current check.
   - One-time disable via 'fhl_off=1' URL param or the close button
 
 Notes

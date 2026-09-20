@@ -905,6 +905,8 @@
       const renamedCharacters = fhlExtractRenamedCharacters(altStaffHtml);
       fhlTrace(trace, `Alt-account ${altAccountId} staff note: extracted ${renamedCharacters.length} rename target${renamedCharacters.length === 1 ? "" : "s"}.`);
       characters.push(...renamedCharacters.map(character => ({ ...character, alt: true })));
+      const deletedHtml = await fhlFetchStaffHtml(`${FHL_SITE_ORIGIN}/panel/deletedchars.php?accountid=${encodeURIComponent(altAccountId)}`, trace, `Alt-account ${altAccountId} deleted characters`);
+      characters.push(...fhlExtractDeletedCharacters(deletedHtml, trace).map(character => ({ ...character, alt: true, deleted: true })));
     }
     return characters;
   }
@@ -971,7 +973,7 @@
     return Array.from(found.values());
   }
 
-  function fhlShowIgnoreEvasionResult(matches, error, trace) {
+  function fhlShowIgnoreEvasionResult(matches, error, trace, banlist = false) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.82); z-index:2147483647;";
     const dialog = document.createElement("div");
@@ -979,16 +981,16 @@
     const heading = document.createElement("div");
     heading.style.cssText = "font-weight:bold; margin-bottom:10px;";
     if (error) {
-      heading.textContent = "Ignore-evasion check could not finish";
+      heading.textContent = banlist ? "Banlist comparison could not finish" : "Ignore-evasion check could not finish";
       const details = document.createElement("div");
       details.textContent = error;
       details.style.cssText = "color:#ffb4b4; font-size:13px; line-height:1.4;";
       dialog.append(heading, details);
     } else if (!matches.length) {
-      heading.textContent = "No matches on ignore list";
+      heading.textContent = banlist ? "No matches on banlist" : "No matches on ignore list";
       dialog.appendChild(heading);
     } else {
-      heading.textContent = "Reported user's characters on reporter's ignore list:";
+      heading.textContent = banlist ? "Reported user's characters on banlist:" : "Reported user's characters on reporter's ignore list:";
       const list = document.createElement("div");
       list.style.cssText = "line-height:1.65;";
       for (const match of matches) {
@@ -1008,7 +1010,7 @@
       dialog.append(heading, list);
     }
     const disclaimer = document.createElement("div");
-    disclaimer.textContent = "Checking characters, renames and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
+    disclaimer.textContent = banlist ? "Checking characters, renames and deleted characters on the reported account and all linked alt accounts." : "Checking characters, renames and deleted characters on all linked accounts. Not checking reporter's alt accounts.";
     disclaimer.style.cssText = "margin-top:16px; color:#9aa7bd; font-size:11px; line-height:1.35;";
     dialog.appendChild(disclaimer);
     const traceEntries = Array.isArray(trace) ? trace : [];
@@ -1123,6 +1125,25 @@
     fhlTraceNameList(trace, "Submitter ignore list", ignoredCharacters);
     if (!ignoredCharacters.length) throw new Error(`No ignore list was found on the staff note for "${submitterName}".`);
 
+    return fhlCompareCharacters(ignoredCharacters, reportedName, trace);
+  }
+
+  function fhlParseBanlist(input) {
+    // Skip the timestamp so its colon is not mistaken for the list delimiter.
+    let names = String(input || "").trim().replace(/^\[[^\]]*\]\s*/, "");
+    const delimiter = names.indexOf(":");
+    if (delimiter !== -1) names = names.slice(delimiter + 1);
+    const unique = new Map();
+    for (const entry of names.split(",")) {
+      const name = entry.trim().replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, "$1$2").trim();
+      const key = fhlComparableCharacterName(name);
+      if (key && !unique.has(key)) unique.set(key, { name, comparisonValue: name });
+    }
+    return Array.from(unique.values());
+  }
+
+  async function fhlCompareCharacters(ignoredCharacters, reportedName, trace) {
+    if (!reportedName) throw new Error("The log is missing the reported-user name.");
     const reportedHtml = await fhlFetchStaffHtml(fhlAdminNoteUrl(reportedName), trace, "Reported-user staff note");
     const accountId = fhlExtractAccountId(reportedHtml);
     fhlTrace(trace, accountId ? `Reported-user staff note: account ID ${accountId} extracted.` : "Reported-user staff note: account ID was not found.");
@@ -1139,21 +1160,29 @@
     fhlTraceNameList(trace, "Deleted characters", deletedCharacters);
     fhlTraceNameList(trace, "Reported-account rename targets", renamedCharacters);
     fhlTraceNameList(trace, "All reported-account characters", allCharacters);
-    fhlTrace(trace, `Comparison input: ${ignoredCharacters.length} ignored name${ignoredCharacters.length === 1 ? "" : "s"}; ${allCharacters.length} active/deleted/renamed character name${allCharacters.length === 1 ? "" : "s"}.`);
+    fhlTrace(trace, `Comparison input: ${ignoredCharacters.length} comparison name${ignoredCharacters.length === 1 ? "" : "s"}; ${allCharacters.length} active/deleted/renamed character name${allCharacters.length === 1 ? "" : "s"}.`);
     const ignoredByName = new Set(ignoredCharacters.map(character => fhlComparableCharacterName(character.comparisonValue || character.name)));
     const ignoredDisplayNames = new Set(ignoredCharacters.map(character => fhlCanonicalName(character.name)));
     const ignoredLooseNames = new Set(ignoredCharacters.map(character => fhlLooseCharacterKey(character.comparisonValue || character.name)));
     const matches = [];
-    const seen = new Set();
+    const seen = new Map();
     for (const character of allCharacters) {
       const key = fhlComparableCharacterName(character.comparisonValue || character.name);
       const displayKey = fhlCanonicalName(character.name);
       const looseKey = fhlLooseCharacterKey(character.comparisonValue || character.name);
       const matchType = ignoredByName.has(key) ? "canonical profile/name" : ignoredDisplayNames.has(displayKey) ? "display name" : ignoredLooseNames.has(looseKey) ? "separator-insensitive" : null;
       fhlTrace(trace, `Comparison candidate: ${JSON.stringify(character.name)}; canonical=${JSON.stringify(key)}; loose=${JSON.stringify(looseKey)}; ${matchType ? `matched by ${matchType}` : "no match"}.`);
-      if (matchType && !seen.has(looseKey)) {
-        seen.add(looseKey);
-        matches.push(character);
+      if (matchType) {
+        const existing = seen.get(key);
+        if (existing) {
+          for (const flag of ["deleted", "alt", "renamed"]) {
+            if (character[flag]) existing[flag] = true;
+          }
+        } else {
+          const match = { ...character };
+          seen.set(key, match);
+          matches.push(match);
+        }
       }
     }
     fhlTrace(trace, `Comparison complete: ${matches.length} matching character${matches.length === 1 ? "" : "s"}.`);
@@ -1488,10 +1517,40 @@
       ignoreEvasionBtn.style.opacity = "1";
     }
   });
+  const compareBanlistBtn = document.createElement("button");
+  compareBanlistBtn.type = "button";
+  compareBanlistBtn.textContent = "Compare banlist";
+  compareBanlistBtn.title = "Compare a pasted banlist with the reported user's characters and linked alt accounts";
+  compareBanlistBtn.style.cssText = ignoreEvasionBtn.style.cssText;
+  compareBanlistBtn.addEventListener("click", async () => {
+    const input = window.prompt("Paste the channel banlist or a comma-separated list of character names:");
+    if (input === null) return;
+    const trace = [];
+    compareBanlistBtn.disabled = true;
+    compareBanlistBtn.textContent = "Checking…";
+    compareBanlistBtn.style.cursor = "wait";
+    compareBanlistBtn.style.opacity = "0.7";
+    try {
+      const names = fhlParseBanlist(input);
+      if (!names.length) throw new Error("Please enter at least one character name.");
+      fhlTrace(trace, `Banlist comparison started with ${names.length} unique names.`);
+      const matches = await fhlCompareCharacters(names, reportingUserRaw, trace);
+      fhlShowIgnoreEvasionResult(matches, null, trace, true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unexpected error occurred.";
+      fhlTrace(trace, `Check stopped with error: ${message}`);
+      fhlShowIgnoreEvasionResult([], message, trace, true);
+    } finally {
+      compareBanlistBtn.disabled = false;
+      compareBanlistBtn.textContent = "Compare banlist";
+      compareBanlistBtn.style.cursor = "pointer";
+      compareBanlistBtn.style.opacity = "1";
+    }
+  });
   const maxIconBadge = document.createElement("div");
   maxIconBadge.style.cssText = "padding:2px 6px; border:1px solid #333; border-radius:4px; background:#151515; color:#ccc; font-size:12px;";
   maxIconBadge.textContent = `Reported max eicons: ${maxReportedIcons}`;
-  ignoreEvasionWrap.append(ignoreEvasionBtn, maxIconBadge);
+  ignoreEvasionWrap.append(compareBanlistBtn, ignoreEvasionBtn, maxIconBadge);
   header.appendChild(ignoreEvasionWrap);
   fhlShowIgnoreEvasionAnnouncement(ignoreEvasionBtn);
 
