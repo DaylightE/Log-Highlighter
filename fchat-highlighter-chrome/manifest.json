@@ -17,7 +17,8 @@
     "https://www.f-list.net/*"
   ],
   "permissions": [
-    "tabs"
+    "tabs",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -28,6 +29,13 @@
         "*://*.f-list.net/fchat/getLog.php*"
       ],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.f-list.net/c/*"
+      ],
+      "js": ["kink-comparison.js"],
       "run_at": "document_idle"
     }
   ]

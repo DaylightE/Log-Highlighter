@@ -1,0 +1,10 @@
+{
+  "name": "f-list-log-highlighter",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/banlist.js tests/kink-comparison.js"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

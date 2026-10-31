@@ -1,12 +1,10 @@
-// Run from the repository root with: gjs tests/banlist.js
-const GLib = imports.gi.GLib;
-const ByteArray = imports.byteArray;
+// Run from the repository root with: node tests/banlist.js
+const { readFileSync } = require("node:fs");
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 for (const browser of ["firefox", "chrome"]) {
-  const [, bytes] = GLib.file_get_contents(`fchat-highlighter-${browser}/content.js`);
-  const source = ByteArray.toString(bytes);
+  const source = readFileSync(`fchat-highlighter-${browser}/content.js`, "utf8");
   new Function(source); // Parse the entire content script without running the page UI.
   const names = source.slice(source.indexOf("  function fhlCanonicalName"), source.indexOf("  function fhlAdminNoteUrl"));
   const parser = source.slice(source.indexOf("  function fhlParseBanlist"), source.indexOf("  async function fhlCompareCharacters"));
@@ -40,5 +38,5 @@ for (const browser of ["firefox", "chrome"]) {
   assert(matches[2].deleted && matches[2].alt, `${browser}: deleted alt labels`);
   assert(matches[3].renamed && matches[3].alt, `${browser}: renamed alt labels`);
   assert(compare(parse('Nobody'), [{ name: 'Alice' }]).length === 0, `${browser}: no matches`);
-  print(`${browser}: syntax, banlist parsing, matching, and labels passed`);
+  console.log(`${browser}: syntax, banlist parsing, matching, and labels passed`);
 }

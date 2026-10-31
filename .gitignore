@@ -1,2 +1,3 @@
 *.zip
 !binaries/*.zip
+node_modules/
