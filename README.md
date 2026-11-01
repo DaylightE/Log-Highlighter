@@ -46,7 +46,7 @@ Features
   - One-time disable via 'fhl_off=1' URL param or the close button
 - Kink comparison on character profiles:
   - Click "(Staff) Save kinks for comparison" to the right of QuickCompare to save that character as your comparison profile. On public pages without QuickCompare, the button appears in the kink header.
-  - Future profiles automatically use QuickCompare's colors to show the saved character's categories and display an exact category match percentage with matching/shared counts.
+  - Future profiles automatically use QuickCompare's colors to show the saved character's categories and display an exact category match percentage with matching/shared counts, plus a "unique" count of standard kinks listed on only one of the two profiles.
   - The percentage is the number of shared standard kinks in exactly the same Fave, Yes, Maybe, or No category, divided by the number of standard kinks listed by both profiles. Unlisted kinks and custom kink names are excluded; standard subkinks inside custom groups are included. Profiles with no shared standard kinks show N/A.
   - Save another character to replace the comparison, save the same character again to refresh its snapshot, or click "Clear saved" after the percentage to stop automatic comparison. Changes also update other open profile tabs.
   - The saved snapshot persists in this browser's extension storage across restarts. It is not refreshed until you save again. Manual QuickCompare can override the colors on the current page; the percentage remains labelled with the saved character.

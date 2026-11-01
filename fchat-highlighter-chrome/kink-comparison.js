@@ -87,7 +87,7 @@
 
   function applyComparison(profile) {
     clearHighlights();
-    if (!savedProfile) return { matches: 0, shared: 0 };
+    if (!savedProfile) return { matches: 0, shared: 0, unshared: 0 };
     let matches = 0;
     let shared = 0;
     for (const element of list.querySelectorAll(".Character_ListedFetish[id]")) {
@@ -104,7 +104,8 @@
       shared++;
       if (savedProfile.kinks[id] === choice) matches++;
     }
-    return { matches, shared };
+    const unshared = Object.keys(profile.kinks).length + Object.keys(savedProfile.kinks).length - 2 * shared;
+    return { matches, shared, unshared };
   }
 
   function render() {
@@ -119,7 +120,7 @@
       status.textContent = "Loading saved comparison...";
       return;
     }
-    const { matches, shared } = applyComparison(profile || { kinks: {} });
+    const { matches, shared, unshared } = applyComparison(profile || { kinks: {} });
     if (error) {
       status.textContent = error;
     } else if (savedProfile) {
@@ -128,8 +129,9 @@
       const link = document.createElement("a");
       link.href = `/c/${encodeURIComponent(savedProfile.name)}`;
       link.textContent = savedProfile.name;
-      status.append(link, shared ? ` (${matches}/${shared} shared kinks)` : " (no shared kinks)");
-      status.title = "Exact category matches / standard kinks listed by both profiles. Fave, Yes, Maybe, and No must match exactly. Unlisted kinks and custom kink names are excluded; standard subkinks are included. QuickCompare colors show the saved character's categories. Manual QuickCompare can override the colors on this page.";
+      const sharedText = shared ? `${matches}/${shared} shared kinks` : "no shared kinks";
+      status.append(link, ` (${sharedText}; ${unshared} unique)`);
+      status.title = "Exact category matches / standard kinks listed by both profiles. Fave, Yes, Maybe, and No must match exactly. Kinks listed on only one profile are counted separately and excluded from the percentage. Custom kink names are excluded; standard subkinks are included. QuickCompare colors show the saved character's categories. Manual QuickCompare can override the colors on this page.";
     } else {
       status.textContent = canSave ? "Save a profile to compare future profiles." : "No standard kinks to save on this profile.";
     }

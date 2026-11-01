@@ -98,11 +98,11 @@ for (const browser of ["chrome", "browser"]) {
     assert.match(first.status, /Save a profile/);
     await first.click(first.save);
     assert.deepEqual(hub.data[STORE_KEY], snapshot({ 1: "fave", 2: "yes", 3: "maybe", 4: "no" }, "First Character", "101"));
-    assert.match(first.status, /100%.*4\/4/);
+    assert.match(first.status, /100%.*4\/4 shared kinks; 0 unique/);
     assert.equal(first.save.textContent, "(Staff) Save kinks for comparison");
 
     const second = await openProfile(hub, { 1: "fave", 2: "fave", 3: "maybe", 4: "no", 5: "yes" }, { browser });
-    assert.match(second.status, /75% match with First Character \(3\/4 shared kinks\)/);
+    assert.match(second.status, /75% match with First Character \(3\/4 shared kinks; 1 unique\)/);
     for (const [id, category] of [[1, "Fave"], [2, "Yes"], [3, "Maybe"], [4, "No"]]) {
       assert.ok(second.kink(id).classList.contains(`Character_QuickCompare${category}`));
       assert.ok(second.kink(id).classList.contains("Character_QuickCompareActive"));
@@ -132,16 +132,16 @@ for (const browser of ["chrome", "browser"]) {
 test("only shared, explicitly categorized standard kinks contribute to the percentage", async () => {
   const hub = storageHub(snapshot({ 1: "fave", 2: "no", 3: "yes" }));
   const partial = await openProfile(hub, { 1: "fave", 2: "maybe", 8: "yes", 9: "no" });
-  assert.match(partial.status, /50%.*1\/2/);
+  assert.match(partial.status, /50%.*1\/2 shared kinks; 3 unique/);
   const zero = await openProfile(hub, { 1: "yes", 2: "maybe" });
-  assert.match(zero.status, /0%.*0\/2/);
+  assert.match(zero.status, /0%.*0\/2 shared kinks; 1 unique/);
   const none = await openProfile(hub, { 8: "yes" });
-  assert.match(none.status, /N\/A.*no shared kinks/);
+  assert.match(none.status, /N\/A.*no shared kinks; 4 unique/);
   const empty = await openProfile(hub);
   assert.equal(empty.save.disabled, true);
-  assert.match(empty.status, /N\/A/);
+  assert.match(empty.status, /N\/A.*no shared kinks; 3 unique/);
   const rounded = await openProfile(hub, { 1: "fave", 2: "maybe", 3: "no" });
-  assert.match(rounded.status, /33\.3%.*1\/3/);
+  assert.match(rounded.status, /33\.3%.*1\/3 shared kinks; 0 unique/);
 });
 
 test("collapsed standard subkinks inherit their custom group's category; custom names are excluded", async () => {
