@@ -1,6 +1,8 @@
 ﻿F-List Log Highlighter
 ================================
 
+Version 2.10.0
+
 Highlights F-List report logs by re-rendering the page with clearer metadata and color-coding.
 
 Match URL: https://www.f-list.net/fchat/getLog.php?log=<id>
@@ -60,6 +62,19 @@ Development
 -----------
 Run `npm ci` and `npm test` with Node.js 18 or later for the log comparison checks and profile comparison tests. Load either browser's extension folder to try source changes. Prebuilt files in `binaries/` are release artifacts and do not include unreleased changes.
 
+Release preparation
+-------------------
+- Chrome 2.10.0: `binaries/fchat-highlighter-chrome.zip` is ready to upload to the Chrome Web Store or extract for unpacked installation. The manifest is at the archive root.
+- Firefox 2.10.0: `binaries/fchat-highlighter-firefox-2.10.0.zip` is the unsigned package to submit for [Mozilla signing for self-distribution](https://extensionworkshop.com/documentation/publish/submitting-an-add-on/#self-distribution). Save the signed result as `binaries/log_highlighter-2.10.0.xpi` before publishing the updated `fchat-highlighter-firefox/update.json`. The existing signed 2.9.0 XPI remains available until then.
+- Firefox validation with `npx --yes web-ext@10.8.0 lint --source-dir fchat-highlighter-firefox --self-hosted` reports no errors and five existing warnings: a missing data-collection declaration, three icon-size aliases pointing to the 128-pixel icon, and the redundant `innerHTML` assignment for the constant Ads button label. Review these warnings during signing; this is a self-distributed update to the existing add-on.
+
+To rebuild the upload packages with Node.js 22 or later:
+
+```sh
+npx --yes web-ext@10.8.0 build --source-dir fchat-highlighter-chrome --artifacts-dir binaries --filename fchat-highlighter-chrome.zip --overwrite-dest
+npx --yes web-ext@10.8.0 build --source-dir fchat-highlighter-firefox --artifacts-dir binaries --filename fchat-highlighter-firefox-2.10.0.zip --overwrite-dest
+```
+
 
 Firefox Version
 ==============
@@ -82,6 +97,12 @@ Alternatively, a Chrome-ready copy is in `binaries/`.
 
 What's New
 ----------
+2.10.0
+- Add "(Staff) Save kinks for comparison" beside QuickCompare, with site button styling and aligned controls.
+- Automatically compare future profiles against the saved character, using QuickCompare colors and an exact category match percentage.
+- Show matching/shared standard kink counts and a "unique" count for kinks listed on only one profile, including standard subkinks inside custom groups.
+- Save comparisons locally across browser restarts, with refresh, replacement, clearing, and updates across open profile tabs.
+
 2.9.0
 - Add Compare banlist beside the ignore-evasion button to check pasted channel bans against the reported account and linked alt accounts.
 - Check deleted characters on linked alt accounts in both comparison tools, preserving deleted, alt-account, and renamed labels.

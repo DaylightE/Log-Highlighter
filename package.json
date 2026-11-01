@@ -1,5 +1,6 @@
 {
   "name": "f-list-log-highlighter",
+  "version": "2.10.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/banlist.js tests/kink-comparison.js"
